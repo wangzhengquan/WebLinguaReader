@@ -1,0 +1,5 @@
+{
+  "name": "Gemini PDF Reader",
+  "description": "A modern, AI-powered PDF reader. Read documents and chat with them using Gemini 2.5 Flash.",
+  "requestFramePermissions": []
+}
