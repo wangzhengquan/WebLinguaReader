@@ -35,7 +35,17 @@ function App() {
   const [isOutlineOpen, setIsOutlineOpen] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
-  const [scale, setScale] = useState(1.0);
+  
+  // Initialize scale from localStorage or default to 1.0
+  const [scale, setScale] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('gemini_pdf_scale');
+      const parsed = saved ? parseFloat(saved) : 1.0;
+      return isNaN(parsed) ? 1.0 : parsed;
+    }
+    return 1.0;
+  });
+
   const [currentText, setCurrentText] = useState("");
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -57,7 +67,14 @@ function App() {
   const settingsRef = useRef<HTMLDivElement>(null);
 
   // Translation State
-  const [targetLanguage, setTargetLanguage] = useState("Simplified Chinese");
+  // Initialize target language from localStorage
+  const [targetLanguage, setTargetLanguage] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('gemini_pdf_target_language') || "Simplified Chinese";
+    }
+    return "Simplified Chinese";
+  });
+
   const [translation, setTranslation] = useState<TranslationPopupState>({
     isOpen: false,
     y: 0,
@@ -68,10 +85,20 @@ function App() {
   const translationRef = useRef<HTMLDivElement>(null);
 
   // Toolbar Input State
-  const [zoomInput, setZoomInput] = useState("100");
+  const [zoomInput, setZoomInput] = useState(() => String(Math.round(scale * 100)));
   const [isZoomFocused, setIsZoomFocused] = useState(false);
   const [pageInput, setPageInput] = useState("1");
   const [isPageFocused, setIsPageFocused] = useState(false);
+
+  // Persist scale to localStorage
+  useEffect(() => {
+    localStorage.setItem('gemini_pdf_scale', scale.toString());
+  }, [scale]);
+
+  // Persist targetLanguage to localStorage
+  useEffect(() => {
+    localStorage.setItem('gemini_pdf_target_language', targetLanguage);
+  }, [targetLanguage]);
 
   // Sync inputs with state when not focused
   useEffect(() => {

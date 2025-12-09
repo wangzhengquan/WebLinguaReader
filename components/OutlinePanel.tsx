@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronRight, ChevronDown, List } from 'lucide-react';
 import { PDFOutlineItem } from '../types';
 
@@ -65,11 +65,50 @@ const OutlineItem: React.FC<{
 };
 
 export const OutlinePanel: React.FC<OutlinePanelProps> = ({ outline, onNavigate, isOpen, onClose }) => {
+  const [width, setWidth] = useState(280);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Constrain width between 180px and 800px
+      const newWidth = Math.max(180, Math.min(800, e.clientX));
+      setWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    // Style body to indicate resizing
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="w-64 md:w-72 border-r border-slate-200 bg-white flex flex-col h-full absolute md:relative z-30 shadow-xl md:shadow-none">
-      <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+    <div 
+      className="border-r border-slate-200 bg-white flex flex-col h-full absolute md:relative z-30 shadow-xl md:shadow-none shrink-0 relative group"
+      style={{ width: width }}
+    >
+      <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2 text-slate-700 font-semibold">
           <List className="w-4 h-4" />
           <h3>Table of Contents</h3>
@@ -91,6 +130,14 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({ outline, onNavigate,
           </div>
         )}
       </div>
+
+      {/* Resize Handle */}
+      <div
+        className={`absolute top-0 right-0 w-1.5 h-full cursor-col-resize z-50 transition-colors hover:bg-blue-400/50 ${
+          isResizing ? 'bg-blue-500' : 'bg-transparent'
+        }`}
+        onMouseDown={startResizing}
+      />
     </div>
   );
 };
