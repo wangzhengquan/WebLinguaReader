@@ -34,9 +34,7 @@ const OutlineItem: React.FC<{
   return (
     <div className="select-none">
       <div 
-        className={`flex items-center py-1.5 px-2 hover:bg-slate-100 cursor-pointer rounded-md text-sm text-slate-700 transition-colors ${
-          depth > 0 ? 'ml-4' : ''
-        }`}
+        className="flex items-center py-1.5 px-2 hover:bg-slate-100 cursor-pointer rounded-md text-sm text-slate-700 transition-colors"
         onClick={handleClick}
       >
         <span 
@@ -54,7 +52,7 @@ const OutlineItem: React.FC<{
         </span>
       </div>
       {hasChildren && expanded && (
-        <div className="border-l border-slate-200 ml-[1.125rem]">
+        <div className="border-l border-slate-200 ml-4 pl-2">
           {item.items.map((child, idx) => (
             <OutlineItem key={idx} item={child} onNavigate={onNavigate} depth={depth + 1} />
           ))}
