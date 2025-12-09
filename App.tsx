@@ -67,6 +67,25 @@ function App() {
   });
   const translationRef = useRef<HTMLDivElement>(null);
 
+  // Toolbar Input State
+  const [zoomInput, setZoomInput] = useState("100");
+  const [isZoomFocused, setIsZoomFocused] = useState(false);
+  const [pageInput, setPageInput] = useState("1");
+  const [isPageFocused, setIsPageFocused] = useState(false);
+
+  // Sync inputs with state when not focused
+  useEffect(() => {
+    if (!isZoomFocused) {
+      setZoomInput(String(Math.round(scale * 100)));
+    }
+  }, [scale, isZoomFocused]);
+
+  useEffect(() => {
+    if (!isPageFocused) {
+      setPageInput(String(currentPage));
+    }
+  }, [currentPage, isPageFocused]);
+
   // Load voices and select a good default
   useEffect(() => {
     const loadVoices = () => {
@@ -234,6 +253,18 @@ function App() {
   const changePage = (delta: number) => {
     setCurrentPage(prev => Math.min(Math.max(1, prev + delta), totalPages));
   };
+
+  const handlePageCommit = () => {
+    let val = parseInt(pageInput.replace(/\D/g, ''), 10);
+    if (isNaN(val)) {
+      setPageInput(String(currentPage));
+      return;
+    }
+    val = Math.min(Math.max(1, val), totalPages);
+    setCurrentPage(val);
+    setPageInput(String(val));
+    setIsPageFocused(false);
+  };
   
   // Callback from PDFViewer when scroll changes
   const handlePageChangeFromScroll = (page: number) => {
@@ -245,6 +276,19 @@ function App() {
 
   const changeScale = (delta: number) => {
     setScale(prev => Math.min(Math.max(0.5, prev + delta), 3.0));
+  };
+
+  const handleZoomCommit = () => {
+    let val = parseInt(zoomInput.replace(/\D/g, ''), 10);
+    if (isNaN(val)) {
+      setZoomInput(String(Math.round(scale * 100)));
+      return;
+    }
+    // Clamp between 50 and 300
+    val = Math.min(Math.max(50, val), 300);
+    setScale(val / 100);
+    setZoomInput(String(val));
+    setIsZoomFocused(false);
   };
 
   const handleOutlineNavigate = async (dest: string | any[]) => {
@@ -416,24 +460,46 @@ function App() {
            {pdfDoc && (
              <>
                 <div className="hidden md:flex items-center bg-slate-100 rounded-lg p-1 mr-2">
-                  <Button variant="ghost" size="sm" onClick={() => changeScale(-0.1)} className="h-8 w-8 p-0">
-                    <ZoomOut className="w-4 h-4" />
+                  <Button variant="ghost" size="sm" onClick={() => changeScale(-0.1)} className="h-10 w-10 p-0">
+                    <ZoomOut className="w-5 h-5" />
                   </Button>
-                  <span className="text-xs font-mono w-12 text-center text-slate-600">{Math.round(scale * 100)}%</span>
-                  <Button variant="ghost" size="sm" onClick={() => changeScale(0.1)} className="h-8 w-8 p-0">
-                    <ZoomIn className="w-4 h-4" />
+                  <div className="flex items-center justify-center w-14 relative group">
+                    <input 
+                      type="text"
+                      className="w-full bg-transparent text-center text-sm font-mono focus:outline-none focus:ring-0 p-0 text-slate-600"
+                      value={zoomInput}
+                      onChange={(e) => setZoomInput(e.target.value)}
+                      onFocus={() => setIsZoomFocused(true)}
+                      onBlur={() => { setIsZoomFocused(false); handleZoomCommit(); }}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget.blur())}
+                    />
+                    <span className="text-xs text-slate-400 absolute right-0 pointer-events-none pr-1">%</span>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => changeScale(0.1)} className="h-10 w-10 p-0">
+                    <ZoomIn className="w-5 h-5" />
                   </Button>
                 </div>
 
                 <div className="flex items-center bg-slate-100 rounded-lg p-1">
-                  <Button variant="ghost" size="sm" onClick={() => changePage(-1)} disabled={currentPage <= 1} className="h-8 w-8 p-0">
-                    <ChevronLeft className="w-4 h-4" />
+                  <Button variant="ghost" size="sm" onClick={() => changePage(-1)} disabled={currentPage <= 1} className="h-10 w-10 p-0">
+                    <ChevronLeft className="w-5 h-5" />
                   </Button>
-                  <span className="text-sm font-medium w-20 text-center text-slate-700">
-                    {currentPage} / {totalPages}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={() => changePage(1)} disabled={currentPage >= totalPages} className="h-8 w-8 p-0">
-                    <ChevronRight className="w-4 h-4" />
+                  <div className="flex items-center gap-1 px-2">
+                    <input 
+                      type="text"
+                      className="w-10 bg-transparent text-right text-sm font-medium focus:outline-none focus:ring-0 p-0 text-slate-700"
+                      value={pageInput}
+                      onChange={(e) => setPageInput(e.target.value)}
+                      onFocus={() => setIsPageFocused(true)}
+                      onBlur={() => { setIsPageFocused(false); handlePageCommit(); }}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget.blur())}
+                    />
+                    <span className="text-sm font-medium text-slate-500 whitespace-nowrap">
+                       / {totalPages}
+                    </span>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => changePage(1)} disabled={currentPage >= totalPages} className="h-10 w-10 p-0">
+                    <ChevronRight className="w-5 h-5" />
                   </Button>
                 </div>
              </>
