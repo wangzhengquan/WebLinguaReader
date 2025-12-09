@@ -717,15 +717,14 @@ function App() {
                  </div>
 
                  {/* Chat Toggle */}
-                 {!isChatOpen && (
-                   <Button 
+                 <Button 
                     variant="primary" 
-                    onClick={() => setIsChatOpen(true)}
-                    className="rounded-full w-14 h-14 shadow-xl flex items-center justify-center bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                    onClick={() => setIsChatOpen(!isChatOpen)}
+                    className="rounded-full w-14 h-14 shadow-xl flex items-center justify-center transition-colors duration-200 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                    title={isChatOpen ? "Close AI Assistant" : "Open AI Assistant"}
                   >
                     <MessageSquare className="w-7 h-7" />
                   </Button>
-                )}
               </div>
             </div>
 
