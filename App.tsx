@@ -729,16 +729,14 @@ function App() {
               </div>
             </div>
 
-            {/* Chat Sidepanel */}
+            {/* Chat Floating Window */}
             {isChatOpen && (
-               <div className="absolute inset-y-0 right-0 w-full md:w-96 shadow-2xl z-40 md:relative md:shadow-none flex-shrink-0">
-                  <ChatPanel 
-                    isOpen={isChatOpen} 
-                    onClose={() => setIsChatOpen(false)} 
-                    pageText={currentText}
-                    currentPage={currentPage}
-                  />
-               </div>
+              <ChatPanel 
+                isOpen={isChatOpen} 
+                onClose={() => setIsChatOpen(false)} 
+                pageText={currentText}
+                currentPage={currentPage}
+              />
             )}
           </>
         )}
