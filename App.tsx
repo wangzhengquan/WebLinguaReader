@@ -730,14 +730,13 @@ function App() {
             </div>
 
             {/* Chat Floating Window */}
-            {isChatOpen && (
-              <ChatPanel 
-                isOpen={isChatOpen} 
-                onClose={() => setIsChatOpen(false)} 
-                pageText={currentText}
-                currentPage={currentPage}
-              />
-            )}
+            <ChatPanel 
+              key={fileName || 'chat-panel'}
+              isOpen={isChatOpen} 
+              onClose={() => setIsChatOpen(false)} 
+              pageText={currentText}
+              currentPage={currentPage}
+            />
           </>
         )}
       </main>
