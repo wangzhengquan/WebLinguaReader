@@ -407,6 +407,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
              let extendNode: Node | null = null;
              let offset = 0;
 
+             // Optimization: If directly hovering a text span, snap to it immediately
              if (moveTarget.tagName === 'SPAN' && moveTarget.parentElement?.classList.contains('textLayer')) {
                  extendNode = moveTarget.firstChild;
                  const r = moveTarget.getBoundingClientRect();
@@ -414,25 +415,57 @@ const PDFPage: React.FC<PDFPageProps> = ({
                      offset = moveTarget.textContent?.length || 0;
                  }
              } else {
+                 // Smart Search in Margin/Whitespace
                  const pageWrapper = moveTarget.closest('.relative');
                  const layer = pageWrapper?.querySelector('.textLayer');
                  if (layer) {
                      const layerSpans = Array.from(layer.children) as HTMLElement[];
-                     let minDist = Infinity;
+                     
+                     // Row Priority Logic:
+                     // 1. First, check if mouse is vertically aligned with any line (Y-Axis Match).
+                     //    If so, only consider spans on that line. This prevents jumping to the next paragraph
+                     //    when dragging far right into the margin.
+                     // 2. If no line match (in vertical whitespace), use Euclidean distance.
+
+                     const lineSpans = layerSpans.filter(s => {
+                        const r = s.getBoundingClientRect();
+                        // 5px buffer for mouse jitter
+                        return ev.clientY >= (r.top - 5) && ev.clientY <= (r.bottom + 5);
+                     });
+
                      let closest = null;
-                     for (const s of layerSpans) {
-                         const r = s.getBoundingClientRect();
-                         const dx = Math.max(r.left - ev.clientX, 0, ev.clientX - r.right);
-                         const dy = Math.max(r.top - ev.clientY, 0, ev.clientY - r.bottom);
-                         const dist = Math.sqrt(dx*dx + dy*dy);
-                         if (dist < minDist) {
-                             minDist = dist;
-                             closest = s;
+
+                     if (lineSpans.length > 0) {
+                         // We are on a line. Find span closest horizontally.
+                         let minXDist = Infinity;
+                         for (const s of lineSpans) {
+                             const r = s.getBoundingClientRect();
+                             // Horizontal distance to span edges
+                             const dx = Math.max(r.left - ev.clientX, 0, ev.clientX - r.right);
+                             if (dx < minXDist) {
+                                 minXDist = dx;
+                                 closest = s;
+                             }
+                         }
+                     } else {
+                         // Fallback: Vertical gap. Find closest by Euclidean distance.
+                         let minDist = Infinity;
+                         for (const s of layerSpans) {
+                             const r = s.getBoundingClientRect();
+                             const dx = Math.max(r.left - ev.clientX, 0, ev.clientX - r.right);
+                             const dy = Math.max(r.top - ev.clientY, 0, ev.clientY - r.bottom);
+                             const dist = Math.sqrt(dx*dx + dy*dy);
+                             if (dist < minDist) {
+                                 minDist = dist;
+                                 closest = s;
+                             }
                          }
                      }
+
                      if (closest && closest.firstChild) {
                          extendNode = closest.firstChild;
                          const r = closest.getBoundingClientRect();
+                         // If mouse is to the right or below the span, select to end
                          if (ev.clientX > r.right || ev.clientY > r.bottom) {
                              offset = closest.textContent?.length || 0;
                          }
