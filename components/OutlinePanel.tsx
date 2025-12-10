@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronRight, ChevronDown, List } from 'lucide-react';
+import { ChevronRight as ChevronRightIcon, ChevronDown as ChevronDownIcon, List as ListIcon } from 'lucide-react';
 import { PDFOutlineItem } from '../types';
 
 interface OutlinePanelProps {
@@ -42,9 +42,9 @@ const OutlineItem: React.FC<{
           onClick={handleToggle}
         >
           {expanded ? (
-            <ChevronDown className="w-3 h-3 text-slate-500" />
+            <ChevronDownIcon className="w-3 h-3 text-slate-500" />
           ) : (
-            <ChevronRight className="w-3 h-3 text-slate-500" />
+            <ChevronRightIcon className="w-3 h-3 text-slate-500" />
           )}
         </span>
         <span className="truncate flex-1" title={item.title}>
@@ -108,13 +108,13 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({ outline, onNavigate,
     >
       <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2 text-slate-700 font-semibold">
-          <List className="w-4 h-4" />
+          <ListIcon className="w-4 h-4" />
           <h3>Table of Contents</h3>
         </div>
         {/* Mobile close button */}
         <button onClick={onClose} className="md:hidden text-slate-400 hover:text-slate-600">
           <span className="sr-only">Close</span>
-          <ChevronRight className="w-5 h-5 rotate-180" />
+          <ChevronRightIcon className="w-5 h-5 rotate-180" />
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-slate-300">

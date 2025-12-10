@@ -1,5 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, MessageSquare, FileText, Globe, X, Loader2, PanelLeftClose, PanelLeftOpen, Headphones, Square, Settings } from 'lucide-react';
+import { 
+  Upload as UploadIcon, 
+  ChevronLeft as ChevronLeftIcon, 
+  ChevronRight as ChevronRightIcon, 
+  ZoomIn as ZoomInIcon, 
+  ZoomOut as ZoomOutIcon, 
+  MessageSquare as MessageSquareIcon, 
+  FileText as FileTextIcon, 
+  Globe as GlobeIcon, 
+  X as XIcon, 
+  Loader2 as Loader2Icon, 
+  PanelLeftClose as PanelLeftCloseIcon, 
+  PanelLeftOpen as PanelLeftOpenIcon, 
+  Headphones as HeadphonesIcon, 
+  Square as SquareIcon, 
+  Settings as SettingsIcon 
+} from 'lucide-react';
 import { Button } from './components/Button';
 import { PDFViewer } from './components/PDFViewer';
 import { ChatPanel } from './components/ChatPanel';
@@ -454,11 +470,11 @@ function App() {
                 className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"
                 title="Toggle Outline"
              >
-               {isOutlineOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
+               {isOutlineOpen ? <PanelLeftCloseIcon className="w-5 h-5" /> : <PanelLeftOpenIcon className="w-5 h-5" />}
              </button>
           )}
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
-            <FileText className="w-5 h-5" />
+            <FileTextIcon className="w-5 h-5" />
           </div>
           <div>
             <h1 className="font-bold text-slate-800 text-lg leading-tight hidden sm:block">Gemini Reader</h1>
@@ -471,7 +487,7 @@ function App() {
            
            {/* Language Selector */}
            <div className="hidden md:flex items-center gap-2 mr-4 bg-slate-100 rounded-lg px-2 py-1">
-             <Globe className="w-4 h-4 text-slate-500" />
+             <GlobeIcon className="w-4 h-4 text-slate-500" />
              <select 
                 value={targetLanguage} 
                 onChange={(e) => setTargetLanguage(e.target.value)}
@@ -488,7 +504,7 @@ function App() {
              <>
                 <div className="hidden md:flex items-center bg-slate-100 rounded-lg p-1 mr-2">
                   <Button variant="ghost" size="sm" onClick={() => changeScale(-0.1)} className="h-10 w-10 p-0">
-                    <ZoomOut className="w-5 h-5" />
+                    <ZoomOutIcon className="w-5 h-5" />
                   </Button>
                   <div className="flex items-center justify-center w-14 relative group">
                     <input 
@@ -503,13 +519,13 @@ function App() {
                     <span className="text-xs text-slate-400 absolute right-0 pointer-events-none pr-1">%</span>
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => changeScale(0.1)} className="h-10 w-10 p-0">
-                    <ZoomIn className="w-5 h-5" />
+                    <ZoomInIcon className="w-5 h-5" />
                   </Button>
                 </div>
 
                 <div className="flex items-center bg-slate-100 rounded-lg p-1">
                   <Button variant="ghost" size="sm" onClick={() => changePage(-1)} disabled={currentPage <= 1} className="h-10 w-10 p-0">
-                    <ChevronLeft className="w-5 h-5" />
+                    <ChevronLeftIcon className="w-5 h-5" />
                   </Button>
                   <div className="flex items-center gap-1 px-2">
                     <input 
@@ -526,7 +542,7 @@ function App() {
                     </span>
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => changePage(1)} disabled={currentPage >= totalPages} className="h-10 w-10 p-0">
-                    <ChevronRight className="w-5 h-5" />
+                    <ChevronRightIcon className="w-5 h-5" />
                   </Button>
                 </div>
              </>
@@ -537,7 +553,7 @@ function App() {
           <label className="cursor-pointer">
             <input type="file" accept="application/pdf" className="hidden" onChange={handleFileChange} />
             <div className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
-              <Upload className="w-4 h-4" />
+              <UploadIcon className="w-4 h-4" />
               <span className="hidden sm:inline">Upload PDF</span>
             </div>
           </label>
@@ -550,7 +566,7 @@ function App() {
         {isDragging && (
           <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-sm z-50 border-4 border-blue-500 border-dashed m-4 rounded-xl flex items-center justify-center pointer-events-none">
             <div className="bg-white p-8 rounded-2xl shadow-xl flex flex-col items-center animate-bounce">
-              <Upload className="w-12 h-12 text-blue-500 mb-4" />
+              <UploadIcon className="w-12 h-12 text-blue-500 mb-4" />
               <p className="text-lg font-bold text-slate-700">Drop PDF here to read</p>
             </div>
           </div>
@@ -565,14 +581,14 @@ function App() {
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
               <div className="flex items-center gap-2 text-blue-600 font-semibold text-sm">
-                <Globe className="w-4 h-4" />
+                <GlobeIcon className="w-4 h-4" />
                 <span>Translate to {targetLanguage}</span>
               </div>
               <button 
                 onClick={() => setTranslation(prev => ({ ...prev, isOpen: false }))}
                 className="text-slate-400 hover:text-slate-600 transition-colors"
               >
-                <X className="w-4 h-4" />
+                <XIcon className="w-4 h-4" />
               </button>
             </div>
             
@@ -580,7 +596,7 @@ function App() {
               <div>
                 {translation.isLoading ? (
                   <div className="flex items-center gap-2 text-sm text-blue-600 py-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2Icon className="w-4 h-4 animate-spin" />
                     Translating...
                   </div>
                 ) : (
@@ -597,7 +613,7 @@ function App() {
           <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
             <div className="bg-white p-12 rounded-3xl shadow-xl border border-slate-100 max-w-lg w-full">
               <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <FileText className="w-10 h-10" />
+                <FileTextIcon className="w-10 h-10" />
               </div>
               <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Gemini Reader</h2>
               <p className="text-slate-500 mb-8">Upload a PDF document to start reading and chatting with AI about its content.</p>
@@ -605,7 +621,7 @@ function App() {
               <label className="cursor-pointer block w-full">
                 <input type="file" accept="application/pdf" className="hidden" onChange={handleFileChange} />
                 <div className="w-full bg-slate-900 text-white hover:bg-slate-800 py-4 rounded-xl font-medium transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg flex items-center justify-center gap-2">
-                  <Upload className="w-5 h-5" />
+                  <UploadIcon className="w-5 h-5" />
                   Select PDF File
                 </div>
               </label>
@@ -642,7 +658,7 @@ function App() {
                      className="bg-white rounded-xl shadow-xl border border-slate-200 p-4 w-72 mb-2 animate-in fade-in slide-in-from-bottom-2"
                    >
                       <h4 className="font-semibold text-slate-800 mb-3 flex items-center gap-2">
-                        <Settings className="w-4 h-4" /> Reading Settings
+                        <SettingsIcon className="w-4 h-4" /> Reading Settings
                       </h4>
                       
                       <div className="space-y-3">
@@ -694,7 +710,7 @@ function App() {
                         className="rounded-full w-12 h-12 shadow-lg flex items-center justify-center bg-white hover:bg-slate-50"
                         title="Reading Settings"
                      >
-                        <Settings className="w-6 h-6 text-slate-600" />
+                        <SettingsIcon className="w-6 h-6 text-slate-600" />
                      </Button>
                    )}
 
@@ -709,9 +725,9 @@ function App() {
                       title={isReading ? "Stop Reading" : "Read Page"}
                     >
                       {isReading ? (
-                        <Square className="w-6 h-6 fill-current" />
+                        <SquareIcon className="w-6 h-6 fill-current" />
                       ) : (
-                        <Headphones className="w-7 h-7" />
+                        <HeadphonesIcon className="w-7 h-7" />
                       )}
                     </Button>
                  </div>
@@ -723,7 +739,7 @@ function App() {
                     className="rounded-full w-14 h-14 shadow-xl flex items-center justify-center transition-colors duration-200 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                     title={isChatOpen ? "Close AI Assistant" : "Open AI Assistant"}
                   >
-                    <MessageSquare className="w-7 h-7" />
+                    <MessageSquareIcon className="w-7 h-7" />
                   </Button>
               </div>
             </div>

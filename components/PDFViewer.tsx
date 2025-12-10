@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { PDFDocumentProxy } from '../types';
 import { extractTextFromPage, pdfjs } from '../services/pdfService';
-import { Loader2 } from 'lucide-react';
+import { Loader2 as Loader2Icon } from 'lucide-react';
 
 interface PDFViewerProps {
   pdfDocument: PDFDocumentProxy | null;
@@ -501,7 +501,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
         
         {isLoading && isVisible && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-20">
-                <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                <Loader2Icon className="w-8 h-8 text-blue-500 animate-spin" />
             </div>
         )}
     </div>

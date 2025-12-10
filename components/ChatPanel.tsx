@@ -1,5 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, X, Loader2, GripHorizontal, Maximize2, Minimize2 } from 'lucide-react';
+import { 
+  Send as SendIcon, 
+  Sparkles as SparklesIcon, 
+  X as XIcon, 
+  Loader2 as Loader2Icon, 
+  GripHorizontal as GripHorizontalIcon, 
+  Maximize2 as Maximize2Icon, 
+  Minimize2 as Minimize2Icon 
+} from 'lucide-react';
 import { Message, ChatState } from '../types';
 import { generateResponse } from '../services/geminiService';
 
@@ -147,16 +155,16 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, pageText,
       >
         <div className="flex items-center gap-2 text-blue-600">
           <div className="bg-blue-100 p-1 rounded-md">
-            <Sparkles className="w-4 h-4" />
+            <SparklesIcon className="w-4 h-4" />
           </div>
           <h2 className="font-semibold text-slate-800 text-sm">AI Assistant</h2>
         </div>
         <div className="flex items-center gap-1">
              <div className="text-slate-300 mr-2">
-                <GripHorizontal className="w-4 h-4" />
+                <GripHorizontalIcon className="w-4 h-4" />
              </div>
             <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-md text-slate-400 hover:text-slate-600 transition-colors">
-                <X className="w-4 h-4" />
+                <XIcon className="w-4 h-4" />
             </button>
         </div>
       </div>
@@ -190,7 +198,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, pageText,
           <div className="flex justify-start">
             <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-none px-4 py-3 shadow-sm">
               <div className="flex items-center gap-2 text-slate-500 text-sm">
-                <Loader2 className="w-3 h-3 animate-spin" />
+                <Loader2Icon className="w-3 h-3 animate-spin" />
                 <span className="text-xs">Thinking...</span>
               </div>
             </div>
@@ -215,7 +223,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, pageText,
             disabled={!input.trim() || chatState === ChatState.LOADING}
             className="absolute right-1.5 bottom-1.5 p-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors"
           >
-            <Send className="w-3.5 h-3.5" />
+            <SendIcon className="w-3.5 h-3.5" />
           </button>
         </div>
         <div className="mt-1.5 flex justify-between items-center px-1">
