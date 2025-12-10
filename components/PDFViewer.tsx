@@ -489,28 +489,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
                 return;
             }
 
-            const upTarget = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement;
-            if (upTarget && upTarget.tagName !== 'SPAN') {
-                const pageWrapper = upTarget.closest('.relative');
-                const layer = pageWrapper?.querySelector('.textLayer');
-                if (layer) {
-                    const layerSpans = Array.from(layer.children) as HTMLElement[];
-                    // Logic to find end text node if released in whitespace
-                    for (let i = layerSpans.length - 1; i >= 0; i--) {
-                        const s = layerSpans[i];
-                        const r = s.getBoundingClientRect();
-                        const isAbove = r.bottom < ev.clientY;
-                        const isSameLineAndLeft = (r.bottom >= ev.clientY && r.top <= ev.clientY) && r.right < ev.clientX;
-                        
-                        if (isAbove || isSameLineAndLeft) {
-                            if (s.firstChild) {
-                                window.getSelection()?.extend(s.firstChild, s.textContent?.length || 0);
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
+            // We do NOT modify selection here for drag events.
+            // Trust handleMouseMove to have set the correct selection end point.
+            // Previous logic here was less robust (causing jumps) than the Row Priority logic in handleMouseMove.
         };
 
         window.addEventListener('mousemove', handleMouseMove);
