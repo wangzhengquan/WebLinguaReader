@@ -368,12 +368,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
     let bestSpan: HTMLElement | null = null;
     
-    // Improved "Best Span" search for multi-column layouts
-    // We want to prioritize:
-    // 1. Spans on the same visual line (Y-axis overlap)
-    // 2. Among those, spans to the right of cursor are preferred for "Start of Text" selection (Left Margin click)
-    // 3. Spans to the left are secondary (Right Margin click)
-
+    // Improved "Best Span" search for multi-column layouts using Distance Priority
     const yBuffer = 10;
     const sameLineSpans = spans.filter(s => {
         const r = s.getBoundingClientRect();
@@ -381,22 +376,30 @@ const PDFPage: React.FC<PDFPageProps> = ({
     });
 
     if (sameLineSpans.length > 0) {
-        // We have text on this line. 
-        // Check for text to the right (Gutter/Left Margin click)
+        // Find closest span on the same line (left or right)
+        const leftSpans = sameLineSpans.filter(s => s.getBoundingClientRect().right <= x);
         const rightSpans = sameLineSpans.filter(s => s.getBoundingClientRect().left >= x);
-        
-        if (rightSpans.length > 0) {
-            // Pick closest to the right
-            bestSpan = rightSpans.reduce((p, c) => 
-                c.getBoundingClientRect().left < p.getBoundingClientRect().left ? c : p
-            );
-        } else {
-            // No text to the right. We must be at the end of the line(s).
-            // Pick closest to the left.
-            bestSpan = sameLineSpans.reduce((p, c) => 
-                c.getBoundingClientRect().right > p.getBoundingClientRect().right ? c : p
-            );
+
+        let bestLeft: HTMLElement | null = null;
+        let bestRight: HTMLElement | null = null;
+
+        if (leftSpans.length > 0) {
+            bestLeft = leftSpans.reduce((p, c) => c.getBoundingClientRect().right > p.getBoundingClientRect().right ? c : p);
         }
+        if (rightSpans.length > 0) {
+            bestRight = rightSpans.reduce((p, c) => c.getBoundingClientRect().left < p.getBoundingClientRect().left ? c : p);
+        }
+
+        if (bestLeft && bestRight) {
+            const distLeft = x - bestLeft.getBoundingClientRect().right;
+            const distRight = bestRight.getBoundingClientRect().left - x;
+            bestSpan = (distLeft <= distRight) ? bestLeft : bestRight;
+        } else if (bestLeft) {
+            bestSpan = bestLeft;
+        } else if (bestRight) {
+            bestSpan = bestRight;
+        }
+
     } else {
         // No text on this line. Find closest below (Fallback)
         let minDist = Infinity;
@@ -471,33 +474,34 @@ const PDFPage: React.FC<PDFPageProps> = ({
                         return ev.clientY >= (r.top - 5) && ev.clientY <= (r.bottom + 5);
                      });
 
-                     let closest = null;
+                     let closest: HTMLElement | null = null;
 
                      if (lineSpans.length > 0) {
                          // We are on a line. 
-                         // Prioritize text to the RIGHT of the cursor (Start of right column)
-                         const rightCandidates = lineSpans.filter(s => s.getBoundingClientRect().left > ev.clientX);
-                         
-                         if (rightCandidates.length > 0) {
-                             // Pick the leftmost span among those to the right
-                             closest = rightCandidates.reduce((prev, curr) => {
-                                 const rPrev = prev.getBoundingClientRect();
-                                 const rCurr = curr.getBoundingClientRect();
-                                 return rCurr.left < rPrev.left ? curr : prev;
-                             });
-                         } else {
-                             // No spans to the right (or we are in right margin).
-                             // Find closest span generally (which will be to the left or under cursor)
-                             let minXDist = Infinity;
-                             for (const s of lineSpans) {
-                                 const r = s.getBoundingClientRect();
-                                 const dx = Math.max(r.left - ev.clientX, 0, ev.clientX - r.right);
-                                 if (dx < minXDist) {
-                                     minXDist = dx;
-                                     closest = s;
-                                 }
-                             }
+                         // Use distance priority to choose between columns
+                         const leftCandidates = lineSpans.filter(s => s.getBoundingClientRect().right <= ev.clientX);
+                         const rightCandidates = lineSpans.filter(s => s.getBoundingClientRect().left >= ev.clientX);
+
+                         let bestLeft: HTMLElement | null = null;
+                         let bestRight: HTMLElement | null = null;
+
+                         if (leftCandidates.length > 0) {
+                             bestLeft = leftCandidates.reduce((p, c) => c.getBoundingClientRect().right > p.getBoundingClientRect().right ? c : p);
                          }
+                         if (rightCandidates.length > 0) {
+                             bestRight = rightCandidates.reduce((p, c) => c.getBoundingClientRect().left < p.getBoundingClientRect().left ? c : p);
+                         }
+
+                         if (bestLeft && bestRight) {
+                             const distLeft = ev.clientX - bestLeft.getBoundingClientRect().right;
+                             const distRight = bestRight.getBoundingClientRect().left - ev.clientX;
+                             closest = (distLeft <= distRight) ? bestLeft : bestRight;
+                         } else if (bestLeft) {
+                             closest = bestLeft;
+                         } else if (bestRight) {
+                             closest = bestRight;
+                         }
+
                      } else {
                          // Fallback: Vertical gap. Find closest by Euclidean distance.
                          let minDist = Infinity;
