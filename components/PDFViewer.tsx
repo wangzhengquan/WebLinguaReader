@@ -354,6 +354,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
    */
   const handleMouseDown = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
+    // If user clicked directly on text, let browser handle it
     if (target.tagName === 'SPAN') return;
 
     const textLayer = textLayerRef.current;
@@ -367,15 +368,51 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
     let bestSpan: HTMLElement | null = null;
     
-    // Find closest span to cursor logic
-    for (const span of spans) {
-        const r = span.getBoundingClientRect();
-        const isBelow = r.top > y;
-        const isSameLineAndRight = (r.bottom >= y && r.top <= y) && r.left > x;
+    // Improved "Best Span" search for multi-column layouts
+    // We want to prioritize:
+    // 1. Spans on the same visual line (Y-axis overlap)
+    // 2. Among those, spans to the right of cursor are preferred for "Start of Text" selection (Left Margin click)
+    // 3. Spans to the left are secondary (Right Margin click)
 
-        if (isBelow || isSameLineAndRight) {
-            bestSpan = span;
-            break; 
+    const yBuffer = 10;
+    const sameLineSpans = spans.filter(s => {
+        const r = s.getBoundingClientRect();
+        return y >= (r.top - yBuffer) && y <= (r.bottom + yBuffer);
+    });
+
+    if (sameLineSpans.length > 0) {
+        // We have text on this line. 
+        // Check for text to the right (Gutter/Left Margin click)
+        const rightSpans = sameLineSpans.filter(s => s.getBoundingClientRect().left >= x);
+        
+        if (rightSpans.length > 0) {
+            // Pick closest to the right
+            bestSpan = rightSpans.reduce((p, c) => 
+                c.getBoundingClientRect().left < p.getBoundingClientRect().left ? c : p
+            );
+        } else {
+            // No text to the right. We must be at the end of the line(s).
+            // Pick closest to the left.
+            bestSpan = sameLineSpans.reduce((p, c) => 
+                c.getBoundingClientRect().right > p.getBoundingClientRect().right ? c : p
+            );
+        }
+    } else {
+        // No text on this line. Find closest below (Fallback)
+        let minDist = Infinity;
+        for (const s of spans) {
+            const r = s.getBoundingClientRect();
+            // Only look downwards
+            if (r.top > y) {
+                const dy = r.top - y;
+                const dx = Math.abs(r.left - x);
+                // Weighted score: Y distance is more important
+                const score = dy * 10 + dx; 
+                if (score < minDist) {
+                    minDist = score;
+                    bestSpan = s;
+                }
+            }
         }
     }
 
@@ -384,7 +421,14 @@ const PDFPage: React.FC<PDFPageProps> = ({
         
         const selection = window.getSelection();
         const range = document.createRange();
-        range.setStart(bestSpan.firstChild, 0);
+        
+        // Smart Anchor:
+        // If we picked a span to the right (Left Margin click), start at 0.
+        // If we picked a span to the left (Right Margin click), start at end.
+        const r = bestSpan.getBoundingClientRect();
+        const offset = (r.left >= x) ? 0 : (bestSpan.textContent?.length || 0);
+
+        range.setStart(bestSpan.firstChild, offset);
         range.collapse(true);
         selection?.removeAllRanges();
         selection?.addRange(range);
@@ -422,10 +466,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
                      const layerSpans = Array.from(layer.children) as HTMLElement[];
                      
                      // Row Priority Logic with Multi-column Support:
-                     // 1. First, check if mouse is vertically aligned with any line (Y-Axis Match).
                      const lineSpans = layerSpans.filter(s => {
                         const r = s.getBoundingClientRect();
-                        // 5px buffer for mouse jitter
                         return ev.clientY >= (r.top - 5) && ev.clientY <= (r.bottom + 5);
                      });
 
@@ -433,14 +475,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
                      if (lineSpans.length > 0) {
                          // We are on a line. 
-                         // To handle multi-column layouts correctly, if we are in whitespace between columns,
-                         // we want to prioritize text to the RIGHT of the cursor (Start of right column)
-                         // rather than text to the LEFT (End of left column).
-                         
+                         // Prioritize text to the RIGHT of the cursor (Start of right column)
                          const rightCandidates = lineSpans.filter(s => s.getBoundingClientRect().left > ev.clientX);
                          
                          if (rightCandidates.length > 0) {
-                             // Pick the leftmost span among those to the right (the closest one)
+                             // Pick the leftmost span among those to the right
                              closest = rightCandidates.reduce((prev, curr) => {
                                  const rPrev = prev.getBoundingClientRect();
                                  const rCurr = curr.getBoundingClientRect();
@@ -452,7 +491,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
                              let minXDist = Infinity;
                              for (const s of lineSpans) {
                                  const r = s.getBoundingClientRect();
-                                 // Horizontal distance to span edges
                                  const dx = Math.max(r.left - ev.clientX, 0, ev.clientX - r.right);
                                  if (dx < minXDist) {
                                      minXDist = dx;
@@ -497,14 +535,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
             
             if (!isDragging) {
                 // If it was just a click without significant drag, clear the selection
-                // This prevents accidentally selecting large chunks of text when clicking margins
                 window.getSelection()?.removeAllRanges();
                 return;
             }
-
-            // We do NOT modify selection here for drag events.
-            // Trust handleMouseMove to have set the correct selection end point.
-            // Previous logic here was less robust (causing jumps) than the Row Priority logic in handleMouseMove.
         };
 
         window.addEventListener('mousemove', handleMouseMove);
