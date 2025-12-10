@@ -20,6 +20,7 @@ interface PDFPageProps {
   highlightedText?: string | null;
   onTextReady: (pageNumber: number, text: string) => void;
   isActivePage: boolean;
+  forcePreload: boolean;
 }
 
 // Sub-component for individual pages
@@ -29,7 +30,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
   scale, 
   highlightedText, 
   onTextReady, 
-  isActivePage 
+  isActivePage,
+  forcePreload
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
@@ -107,7 +109,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
   // 4. Robust Text Highlighting Logic (Interactive Phase)
   useEffect(() => {
-    if (!highlightedText || !textLayerRef.current || !isVisible) {
+    const shouldRender = isVisible || forcePreload;
+    if (!highlightedText || !textLayerRef.current || !shouldRender) {
       setHighlights([]);
       return;
     }
@@ -200,12 +203,15 @@ const PDFPage: React.FC<PDFPageProps> = ({
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [highlightedText, isVisible, isActivePage]);
+  }, [highlightedText, isVisible, forcePreload, isActivePage]);
 
 
   // 5. Main Rendering Logic (Paint Phase)
   useEffect(() => {
-    if (!isVisible || !dimensions) return; 
+    // Render if visible in viewport OR forced to preload
+    const shouldRender = isVisible || forcePreload;
+
+    if (!shouldRender || !dimensions) return; 
 
     // Skip re-render if scale hasn't changed effectively
     if (Math.abs(renderedScale - scale) < 0.01 && !isLoading && renderedScale !== 0) return;
@@ -311,7 +317,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
         renderTaskRef.current = null;
       }
     };
-  }, [isVisible, pdfDocument, pageNumber, scale, dimensions]);
+  }, [isVisible, forcePreload, pdfDocument, pageNumber, scale, dimensions]);
 
   const getRelativeRect = (rect: DOMRect) => {
     if (!textLayerRef.current) return rect;
@@ -459,6 +465,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
   const width = dimensions ? dimensions.width : 600;
   const height = dimensions ? dimensions.height : 800;
+  const shouldRender = isVisible || forcePreload;
 
   return (
     <div 
@@ -472,7 +479,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
         id={`pdf-page-${pageNumber}`}
         onMouseDown={handleMouseDown}
     >
-        {isVisible && dimensions ? (
+        {shouldRender && dimensions ? (
             <>
                 <canvas ref={canvasRef} className="block" />
                 <div ref={textLayerRef} className="textLayer absolute inset-0 origin-top-left" />
@@ -499,7 +506,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
              </div>
         )}
         
-        {isLoading && isVisible && (
+        {isLoading && shouldRender && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-20">
                 <Loader2Icon className="w-8 h-8 text-blue-500 animate-spin" />
             </div>
@@ -521,13 +528,39 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const isAutoScrolling = useRef(false);
   const mostVisiblePageRef = useRef(1);
+  const [preloadedPages, setPreloadedPages] = useState<Set<number>>(new Set());
 
-  // Handle total page count
+  // Handle total page count and reset preload on new doc
   useEffect(() => {
     if (pdfDocument) {
       onPageChange(pdfDocument.numPages);
+      setPreloadedPages(new Set());
     }
   }, [pdfDocument, onPageChange]);
+
+  // Preload Logic: Wait 5s after page change, then preload +/- 5 pages
+  useEffect(() => {
+    if (!pdfDocument) return;
+
+    const timer = setTimeout(() => {
+        setPreloadedPages(prev => {
+            const newSet = new Set(prev);
+            const start = Math.max(1, currentPage - 5);
+            const end = Math.min(pdfDocument.numPages, currentPage + 5);
+            let changed = false;
+            
+            for (let i = start; i <= end; i++) {
+                if (!newSet.has(i)) {
+                    newSet.add(i);
+                    changed = true;
+                }
+            }
+            return changed ? newSet : prev;
+        });
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [currentPage, pdfDocument]);
 
   // Handle Scroll to detect active page
   const handleScroll = useCallback(() => {
@@ -624,6 +657,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
                 }
             }}
             isActivePage={pageNum === currentPage}
+            forcePreload={preloadedPages.has(pageNum)}
         />
       ))}
     </div>
