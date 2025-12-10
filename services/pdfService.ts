@@ -9,12 +9,26 @@ pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pd
 
 export { pdfjs };
 
+/**
+ * 加载 PDF 文件。
+ * 将浏览器 File 对象转换为 ArrayBuffer，并使用 pdfjs 获取文档代理对象。
+ * @param file 用户上传的文件对象
+ * @returns PDFDocumentProxy Promise
+ */
 export const loadPDF = async (file: File): Promise<PDFDocumentProxy> => {
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
   return loadingTask.promise as unknown as Promise<PDFDocumentProxy>;
 };
 
+/**
+ * 从指定 PDF 页面提取纯文本。
+ * 包含两个主要处理逻辑：
+ * 1. 过滤：基于坐标去除页眉、页脚和页边距内容（通常是页码或无关信息）。
+ * 2. 排序：基于 Y 轴（自上而下）和 X 轴（自左向右）对文本块重新排序，以还原人类阅读顺序。
+ * @param page PDFPageProxy 对象
+ * @returns 处理后的页面文本字符串
+ */
 export const extractTextFromPage = async (page: PDFPageProxy): Promise<string> => {
   try {
     const textContent = await page.getTextContent();
@@ -79,6 +93,11 @@ export const extractTextFromPage = async (page: PDFPageProxy): Promise<string> =
   }
 };
 
+/**
+ * 获取 PDF 文档的目录大纲结构。
+ * @param doc PDFDocumentProxy 文档对象
+ * @returns 目录项数组（树形结构）
+ */
 export const getPDFOutline = async (doc: PDFDocumentProxy): Promise<PDFOutlineItem[]> => {
   try {
     const outline = await doc.getOutline();
@@ -89,6 +108,13 @@ export const getPDFOutline = async (doc: PDFDocumentProxy): Promise<PDFOutlineIt
   }
 };
 
+/**
+ * 解析跳转目标。
+ * 将大纲项或链接中的 dest 属性（可能是字符串 ID 或数组引用）转换为具体的页码。
+ * @param doc PDFDocumentProxy 文档对象
+ * @param dest 目标位置描述符
+ * @returns 页码 (1-based index)，如果解析失败返回 -1
+ */
 export const resolvePageFromDest = async (doc: PDFDocumentProxy, dest: string | any[]): Promise<number> => {
   try {
     let explicitDest = dest;
