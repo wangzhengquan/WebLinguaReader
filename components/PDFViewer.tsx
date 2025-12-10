@@ -41,7 +41,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   
   // Unified rendering state
-  // Initialized by forcePreload, updated by IntersectionObserver or prop change
   const [shouldRender, setShouldRender] = useState(forcePreload);
   
   // Initialize with null to indicate "loading dimensions"
@@ -77,7 +76,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
   // 2. Intersection Observer (Paint Phase) - Trigger Render
   useEffect(() => {
-    // If already rendering (due to preload or previous visit), we don't need to observe
     if (shouldRender) return;
 
     const element = wrapperRef.current;
@@ -88,13 +86,12 @@ const PDFPage: React.FC<PDFPageProps> = ({
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             setShouldRender(true);
-            observer.disconnect(); // Once triggered, we stay rendered
+            observer.disconnect();
           }
         });
       },
       {
-        root: null, // viewport
-        // Load pages 2 screens away
+        root: null, 
         rootMargin: '200% 0px', 
         threshold: 0
       }
@@ -221,13 +218,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
   useEffect(() => {
     if (!shouldRender || !dimensions) return; 
 
-    // Skip re-render if scale hasn't changed effectively
     if (Math.abs(renderedScale - scale) < 0.01 && !isLoading && renderedScale !== 0) return;
 
     let isCancelled = false;
 
     const renderPage = async () => {
-      // Cancel previous task if any
       if (renderTaskRef.current) {
         try { 
           renderTaskRef.current.cancel(); 
@@ -278,9 +273,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
           
           try {
             await renderTask.promise;
-          } catch (error: any) {
-            // Cancelled exception is expected
-          }
+          } catch (error: any) {}
         }
       }
 
@@ -288,8 +281,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
       // 渲染文本层 (Text Layer)
       // 这是让 PDF 文字可以被选中的核心代码。
-      // 它在 Canvas 上方覆盖一层透明的 HTML 文本，与图片中的文字完全重合。
-      // 用户选中的其实是这层透明的 HTML 文本。
       if (textLayerRef.current) {
          const textLayerDiv = textLayerRef.current;
          textLayerDiv.innerHTML = "";
@@ -307,9 +298,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
              viewport: viewport,
              textDivs: []
            }).promise;
-         } catch(e) {
-           // Text layer errors ignored
-         }
+         } catch(e) {}
       }
 
       if (!isCancelled) {
@@ -342,120 +331,147 @@ const PDFPage: React.FC<PDFPageProps> = ({
   };
 
   /**
+   * Helper: Find closest text node with Strict Row Priority.
+   * Prevents selecting adjacent lines when in margins.
+   */
+  const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElement) => {
+    const spans = Array.from(layer.children) as HTMLElement[];
+    if (spans.length === 0) return null;
+
+    // 1. Identify "Visual Row"
+    // Strict vertical check: Cursor MUST be between top and bottom of the span
+    const rowSpans = spans.filter(s => {
+        const r = s.getBoundingClientRect();
+        return clientY >= r.top && clientY <= r.bottom;
+    });
+
+    // If on a row (or horizontal margin of a row)
+    if (rowSpans.length > 0) {
+        // Sort by X position
+        rowSpans.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+        
+        const firstSpan = rowSpans[0];
+        const lastSpan = rowSpans[rowSpans.length - 1];
+        const firstRect = firstSpan.getBoundingClientRect();
+        const lastRect = lastSpan.getBoundingClientRect();
+
+        // Left Margin -> Start of First Span
+        if (clientX < firstRect.left) {
+            return { node: firstSpan.firstChild, offset: 0 };
+        }
+        
+        // Right Margin -> End of Last Span
+        if (clientX > lastRect.right) {
+            return { node: lastSpan.firstChild, offset: lastSpan.textContent?.length || 0 };
+        }
+
+        // Inside the row (between words or columns)
+        for (let i = 0; i < rowSpans.length; i++) {
+             const span = rowSpans[i];
+             const r = span.getBoundingClientRect();
+             
+             // Hovering this span
+             if (clientX >= r.left && clientX <= r.right) {
+                 // Try high-precision selection if native API supports it
+                 const doc = document as any;
+                 if (doc.caretPositionFromPoint) {
+                    const pos = doc.caretPositionFromPoint(clientX, clientY);
+                    if (pos && pos.offsetNode === span.firstChild) {
+                        return { node: span.firstChild, offset: pos.offset };
+                    }
+                 } else if (doc.caretRangeFromPoint) {
+                    const range = doc.caretRangeFromPoint(clientX, clientY);
+                    if (range && range.startContainer === span.firstChild) {
+                        return { node: span.firstChild, offset: range.startOffset };
+                    }
+                 }
+                 
+                 // Fallback to simpler midpoint check
+                 return { node: span.firstChild, offset: clientX > (r.left + r.width/2) ? (span.textContent?.length||0) : 0 };
+             }
+
+             // Gutter between this and next
+             if (i < rowSpans.length - 1) {
+                 const nextSpan = rowSpans[i+1];
+                 const nextR = nextSpan.getBoundingClientRect();
+                 if (clientX > r.right && clientX < nextR.left) {
+                     const distLeft = clientX - r.right;
+                     const distRight = nextR.left - clientX;
+                     if (distLeft <= distRight) {
+                         return { node: span.firstChild, offset: span.textContent?.length || 0 };
+                     } else {
+                         return { node: nextSpan.firstChild, offset: 0 };
+                     }
+                 }
+             }
+        }
+    } 
+    
+    // 2. Vertical Gap (Cursor is strictly between lines)
+    // Find closest span vertically to respect user intent
+    let bestSpan: HTMLElement | null = null;
+    let minVerticalDist = Infinity;
+    
+    for (const s of spans) {
+        const r = s.getBoundingClientRect();
+        
+        let dist = 0;
+        if (clientY < r.top) dist = r.top - clientY;
+        else if (clientY > r.bottom) dist = clientY - r.bottom;
+        else dist = 0; // Should have been caught above
+        
+        if (dist < minVerticalDist) {
+            minVerticalDist = dist;
+            bestSpan = s;
+        } else if (dist === minVerticalDist && bestSpan) {
+             // Tie-breaker: X distance
+             const currX = Math.min(Math.abs(clientX - r.left), Math.abs(clientX - r.right));
+             const bestX = Math.min(Math.abs(clientX - bestSpan.getBoundingClientRect().left), Math.abs(clientX - bestSpan.getBoundingClientRect().right));
+             if (currX < bestX) bestSpan = s;
+        }
+    }
+
+    if (bestSpan) {
+        const r = bestSpan.getBoundingClientRect();
+        // If cursor is below span -> End of span (dragging down)
+        if (clientY > r.bottom) return { node: bestSpan.firstChild, offset: bestSpan.textContent?.length || 0 };
+        // If cursor is above span -> Start of span (dragging up)
+        if (clientY < r.top) return { node: bestSpan.firstChild, offset: 0 };
+        
+        // Fallback
+        if (clientX > r.right) return { node: bestSpan.firstChild, offset: bestSpan.textContent?.length || 0 };
+        return { node: bestSpan.firstChild, offset: 0 };
+    }
+
+    return null;
+  };
+
+  /**
    * 智能文本选择 (Smart Text Selection)
-   * 
-   * PDF.js 的渲染层通常包含大量的空白区域（Margins/Padding）。
-   * 默认情况下，在这些空白区域点击或拖拽无法选中文本。
-   * 
-   * 此函数实现了以下功能：
-   * 1. 点击定位：点击空白处时，自动找到最近的文本节点。
-   * 2. 拖拽选择：允许从页边距或行间距开始拖拽选择文本。
-   * 3. 智能吸附：根据鼠标位置判断是选中当前行的开头还是结尾。
+   * Replaced Native Selection with fully custom calculations.
    */
   const handleMouseDown = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
     const textLayer = textLayerRef.current;
     if (!textLayer) return;
 
-    // Determine if we are starting from text (Native) or whitespace (Custom)
-    const isNativeStart = target.tagName === 'SPAN';
+    // FORCE custom selection logic everywhere
+    e.preventDefault(); 
 
-    let success = false;
+    const result = findClosestTextNode(e.clientX, e.clientY, textLayer);
+    
+    if (result && result.node) {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.setStart(result.node, result.offset);
+        range.collapse(true);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
 
-    // Logic for Custom Start (Whitespace)
-    if (!isNativeStart) {
-        const x = e.clientX;
-        const y = e.clientY;
-
-        const spans = Array.from(textLayer.children) as HTMLElement[];
-        if (spans.length === 0) return;
-
-        let bestSpan: HTMLElement | null = null;
-        
-        // Improved "Best Span" search for multi-column layouts using Distance Priority
-        const yBuffer = 10;
-        const sameLineSpans = spans.filter(s => {
-            const r = s.getBoundingClientRect();
-            return y >= (r.top - yBuffer) && y <= (r.bottom + yBuffer);
-        });
-
-        if (sameLineSpans.length > 0) {
-            // Find closest span on the same line (left or right)
-            const leftSpans = sameLineSpans.filter(s => s.getBoundingClientRect().right <= x);
-            const rightSpans = sameLineSpans.filter(s => s.getBoundingClientRect().left >= x);
-
-            let bestLeft: HTMLElement | null = null;
-            let bestRight: HTMLElement | null = null;
-
-            if (leftSpans.length > 0) {
-                bestLeft = leftSpans.reduce((p, c) => c.getBoundingClientRect().right > p.getBoundingClientRect().right ? c : p);
-            }
-            if (rightSpans.length > 0) {
-                bestRight = rightSpans.reduce((p, c) => c.getBoundingClientRect().left < p.getBoundingClientRect().left ? c : p);
-            }
-
-            if (bestLeft && bestRight) {
-                const distLeft = x - bestLeft.getBoundingClientRect().right;
-                const distRight = bestRight.getBoundingClientRect().left - x;
-                bestSpan = (distLeft <= distRight) ? bestLeft : bestRight;
-            } else if (bestLeft) {
-                bestSpan = bestLeft;
-            } else if (bestRight) {
-                bestSpan = bestRight;
-            }
-
-        } else {
-            // No text on this line. Find closest below (Fallback)
-            let minDist = Infinity;
-            for (const s of spans) {
-                const r = s.getBoundingClientRect();
-                // Only look downwards
-                if (r.top > y) {
-                    const dy = r.top - y;
-                    const dx = Math.abs(r.left - x);
-                    // Weighted score: Y distance is more important
-                    const score = dy * 10 + dx; 
-                    if (score < minDist) {
-                        minDist = score;
-                        bestSpan = s;
-                    }
-                }
-            }
-        }
-
-        if (bestSpan && bestSpan.firstChild) {
-            e.preventDefault(); 
-            
-            const selection = window.getSelection();
-            const range = document.createRange();
-            
-            // Smart Anchor:
-            // If we picked a span to the right (Left Margin click), start at 0.
-            // If we picked a span to the left (Right Margin click), start at end.
-            const r = bestSpan.getBoundingClientRect();
-            const offset = (r.left >= x) ? 0 : (bestSpan.textContent?.length || 0);
-
-            range.setStart(bestSpan.firstChild, offset);
-            range.collapse(true);
-            selection?.removeAllRanges();
-            selection?.addRange(range);
-            
-            success = true;
-        }
-    } else {
-        // Native start (clicked on text)
-        // We don't prevent default, letting browser handle initial caret placement.
-        // But we DO attach listeners to handle dragging into whitespace.
-        success = true;
-    }
-
-    if (success) {
         const startX = e.clientX;
         const startY = e.clientY;
         let isDragging = false;
 
         const handleMouseMove = (ev: MouseEvent) => {
-             // Only consider it a drag if moved more than 5 pixels
              if (!isDragging) {
                  const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
                  if (dist < 5) return;
@@ -463,109 +479,26 @@ const PDFPage: React.FC<PDFPageProps> = ({
              }
 
              const moveTarget = document.elementFromPoint(ev.clientX, ev.clientY);
-             if (!moveTarget) return;
+             const pageWrapper = (moveTarget as HTMLElement)?.closest('.relative');
+             
+             // Dynamic Layer Detection
+             // Only allow selecting text within this PDF Viewer
+             let layer = pageWrapper?.querySelector('.textLayer') as HTMLElement;
+             if (!layer && textLayerRef.current) layer = textLayerRef.current; // Fallback to start page
 
-             let extendNode: Node | null = null;
-             let offset = 0;
-             let shouldUseCustomLogic = false;
-
-             // Check if we are hovering a text span
-             if (moveTarget.tagName === 'SPAN' && moveTarget.parentElement?.classList.contains('textLayer')) {
-                 if (isNativeStart) {
-                     // If we started natively and are on text, let browser handle precision selection
-                     return;
-                 } else {
-                     // Started in whitespace, landed on text. Use coarse snap.
-                     extendNode = moveTarget.firstChild;
-                     const r = moveTarget.getBoundingClientRect();
-                     if (ev.clientX > r.left + r.width/2) {
-                         offset = moveTarget.textContent?.length || 0;
-                     }
-                     shouldUseCustomLogic = true;
+             if (layer) {
+                 const result = findClosestTextNode(ev.clientX, ev.clientY, layer);
+                 if (result && result.node) {
+                     window.getSelection()?.extend(result.node, result.offset);
                  }
-             } else {
-                 // Hovering Whitespace/Margin -> ALWAYS use Smart Logic
-                 // This fixes the bug where dragging from Text -> Whitespace selects too much
-                 shouldUseCustomLogic = true;
-                 
-                 const pageWrapper = moveTarget.closest('.relative');
-                 const layer = pageWrapper?.querySelector('.textLayer');
-                 if (layer) {
-                     const layerSpans = Array.from(layer.children) as HTMLElement[];
-                     
-                     // Row Priority Logic with Multi-column Support:
-                     const lineSpans = layerSpans.filter(s => {
-                        const r = s.getBoundingClientRect();
-                        return ev.clientY >= (r.top - 5) && ev.clientY <= (r.bottom + 5);
-                     });
-
-                     let closest: HTMLElement | null = null;
-
-                     if (lineSpans.length > 0) {
-                         // We are on a line. 
-                         // Use distance priority to choose between columns
-                         const leftCandidates = lineSpans.filter(s => s.getBoundingClientRect().right <= ev.clientX);
-                         const rightCandidates = lineSpans.filter(s => s.getBoundingClientRect().left >= ev.clientX);
-
-                         let bestLeft: HTMLElement | null = null;
-                         let bestRight: HTMLElement | null = null;
-
-                         if (leftCandidates.length > 0) {
-                             bestLeft = leftCandidates.reduce((p, c) => c.getBoundingClientRect().right > p.getBoundingClientRect().right ? c : p);
-                         }
-                         if (rightCandidates.length > 0) {
-                             bestRight = rightCandidates.reduce((p, c) => c.getBoundingClientRect().left < p.getBoundingClientRect().left ? c : p);
-                         }
-
-                         if (bestLeft && bestRight) {
-                             const distLeft = ev.clientX - bestLeft.getBoundingClientRect().right;
-                             const distRight = bestRight.getBoundingClientRect().left - ev.clientX;
-                             closest = (distLeft <= distRight) ? bestLeft : bestRight;
-                         } else if (bestLeft) {
-                             closest = bestLeft;
-                         } else if (bestRight) {
-                             closest = bestRight;
-                         }
-
-                     } else {
-                         // Fallback: Vertical gap. Find closest by Euclidean distance.
-                         let minDist = Infinity;
-                         for (const s of layerSpans) {
-                             const r = s.getBoundingClientRect();
-                             const dx = Math.max(r.left - ev.clientX, 0, ev.clientX - r.right);
-                             const dy = Math.max(r.top - ev.clientY, 0, ev.clientY - r.bottom);
-                             const dist = Math.sqrt(dx*dx + dy*dy);
-                             if (dist < minDist) {
-                                 minDist = dist;
-                                 closest = s;
-                             }
-                         }
-                     }
-
-                     if (closest && closest.firstChild) {
-                         extendNode = closest.firstChild;
-                         const r = closest.getBoundingClientRect();
-                         // If mouse is to the right or below the span, select to end
-                         if (ev.clientX > r.right || ev.clientY > r.bottom) {
-                             offset = closest.textContent?.length || 0;
-                         }
-                     }
-                 }
-             }
-
-             if (shouldUseCustomLogic && extendNode) {
-                 window.getSelection()?.extend(extendNode, offset);
              }
         };
 
-        const handleMouseUp = (ev: MouseEvent) => {
+        const handleMouseUp = () => {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
-            
-            if (!isDragging && !isNativeStart) {
-                // If it was just a click (in whitespace) without significant drag, clear the selection
-                window.getSelection()?.removeAllRanges();
-                return;
+            if (!isDragging) {
+                // Keep cursor at clicked position (caret), don't remove range
             }
         };
 
@@ -584,7 +517,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
         style={{ 
             width: width, 
             height: height,
-            minHeight: height // Enforce min height
+            minHeight: height
         }}
         id={`pdf-page-${pageNumber}`}
         onMouseDown={handleMouseDown}
@@ -640,7 +573,6 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   const mostVisiblePageRef = useRef(1);
   const [preloadedPages, setPreloadedPages] = useState<Set<number>>(new Set());
 
-  // Handle total page count and reset preload on new doc
   useEffect(() => {
     if (pdfDocument) {
       onPageChange(pdfDocument.numPages);
@@ -648,17 +580,14 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
     }
   }, [pdfDocument, onPageChange]);
 
-  // Preload Logic: Wait 5s after page change, then preload +/- 5 pages
   useEffect(() => {
     if (!pdfDocument) return;
-
     const timer = setTimeout(() => {
         setPreloadedPages(prev => {
             const newSet = new Set(prev);
             const start = Math.max(1, currentPage - 5);
             const end = Math.min(pdfDocument.numPages, currentPage + 5);
             let changed = false;
-            
             for (let i = start; i <= end; i++) {
                 if (!newSet.has(i)) {
                     newSet.add(i);
@@ -668,11 +597,9 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
             return changed ? newSet : prev;
         });
     }, 5000);
-
     return () => clearTimeout(timer);
   }, [currentPage, pdfDocument]);
 
-  // Handle Scroll to detect active page
   const handleScroll = useCallback(() => {
     if (isAutoScrolling.current || !containerRef.current) return;
 
@@ -684,20 +611,12 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
     let minDistance = Infinity;
 
     const children = container.children;
-    
-    // Efficiently find closest page to center
     for (let i = 0; i < children.length; i++) {
         const child = children[i] as HTMLElement;
         if (!child.id.startsWith('pdf-page-')) continue;
-
         const rect = child.getBoundingClientRect();
-        
-        // Optimization: Stop if we've passed the view
         if (rect.top > containerRect.bottom) break;
-        // Skip if way above
         if (rect.bottom < containerRect.top) continue;
-
-        // Distance from page center to viewport center
         const pageCenterY = rect.top + (rect.height / 2);
         const distance = Math.abs(pageCenterY - centerY);
 
@@ -714,26 +633,18 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   }, [onNavigatePage]);
 
 
-  // Programmatic Scroll (Navigation buttons / Outline / Search)
   useEffect(() => {
     if (!pdfDocument || !containerRef.current) return;
-
-    // Check if the requested page is different from what we think is visible
     if (currentPage !== mostVisiblePageRef.current) {
-        
         isAutoScrolling.current = true;
-        mostVisiblePageRef.current = currentPage; // Sync immediately
-        
+        mostVisiblePageRef.current = currentPage;
         const pageEl = document.getElementById(`pdf-page-${currentPage}`);
         if (pageEl) {
             pageEl.scrollIntoView({ behavior: 'auto', block: 'start' });
         }
-
-        // Release lock after scroll settles
         const timeout = setTimeout(() => {
             isAutoScrolling.current = false;
         }, 500); 
-
         return () => clearTimeout(timeout);
     }
   }, [currentPage, pdfDocument]);
@@ -761,7 +672,6 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
             scale={scale}
             highlightedText={highlightedText}
             onTextReady={(_, text) => {
-                // We could optimize this to only update when page settles
                 if (pageNum === currentPage) {
                     onTextExtracted(text);
                 }
