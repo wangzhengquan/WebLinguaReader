@@ -46,6 +46,7 @@ interface TranslationPopupState {
 
 function App() {
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
+  const [docId, setDocId] = useState<string>(() => Date.now().toString());
   const [outline, setOutline] = useState<PDFOutlineItem[]>([]);
   const [isOutlineOpen, setIsOutlineOpen] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -259,6 +260,7 @@ function App() {
         const doc = await loadPDF(file);
         setPdfDoc(doc);
         setFileName(file.name);
+        setDocId(Date.now().toString()); // Generate new ID to force viewer remount
         setCurrentPage(1);
         setTotalPages(doc.numPages);
         
@@ -612,6 +614,7 @@ function App() {
 
             <div className={`flex-1 flex flex-col transition-all duration-300 relative w-full`}>
               <PDFViewer 
+                key={docId}
                 pdfDocument={pdfDoc} 
                 currentPage={currentPage} 
                 scale={scale}
@@ -719,7 +722,7 @@ function App() {
 
             {/* Chat Floating Window */}
             <ChatPanel 
-              key={fileName || 'chat-panel'}
+              key={docId}
               isOpen={isChatOpen} 
               onClose={() => setIsChatOpen(false)} 
               pageText={currentText}
