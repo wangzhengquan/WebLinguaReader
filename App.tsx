@@ -8,8 +8,6 @@ import {
   MessageSquare as MessageSquareIcon, 
   FileText as FileTextIcon, 
   Globe as GlobeIcon, 
-  X as XIcon, 
-  Loader2 as Loader2Icon, 
   PanelLeftClose as PanelLeftCloseIcon, 
   PanelLeftOpen as PanelLeftOpenIcon, 
   Headphones as HeadphonesIcon, 
@@ -20,6 +18,7 @@ import { Button } from './components/Button';
 import { PDFViewer } from './components/PDFViewer';
 import { ChatPanel } from './components/ChatPanel';
 import { OutlinePanel } from './components/OutlinePanel';
+import { TranslationPopup } from './components/TranslationPopup';
 import { loadPDF, getPDFOutline, resolvePageFromDest } from './services/pdfService';
 import { PDFDocumentProxy, PDFOutlineItem } from './types';
 import * as geminiService from './services/geminiService';
@@ -573,41 +572,15 @@ function App() {
         )}
 
         {/* Translation Popup */}
-        {translation.isOpen && (
-          <div 
-            ref={translationRef}
-            className="fixed z-[60] bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100 w-[800px] max-w-[95vw] left-1/2 -translate-x-1/2"
-            style={{ top: translation.y }}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
-              <div className="flex items-center gap-2 text-blue-600 font-semibold text-sm">
-                <GlobeIcon className="w-4 h-4" />
-                <span>Translate to {targetLanguage}</span>
-              </div>
-              <button 
-                onClick={() => setTranslation(prev => ({ ...prev, isOpen: false }))}
-                className="text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <XIcon className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div className="p-4 max-h-60 overflow-y-auto">
-              <div>
-                {translation.isLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-blue-600 py-2">
-                    <Loader2Icon className="w-4 h-4 animate-spin" />
-                    Translating...
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-800 leading-relaxed font-medium">
-                    {translation.translatedText}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        <TranslationPopup 
+          ref={translationRef}
+          isOpen={translation.isOpen}
+          y={translation.y}
+          targetLanguage={targetLanguage}
+          translatedText={translation.translatedText}
+          isLoading={translation.isLoading}
+          onClose={() => setTranslation(prev => ({ ...prev, isOpen: false }))}
+        />
 
         {!pdfDoc ? (
           <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
