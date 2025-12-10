@@ -286,7 +286,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
       if (isCancelled) return;
 
-      // Render Text Layer
+      // 渲染文本层 (Text Layer)
+      // 这是让 PDF 文字可以被选中的核心代码。
+      // 它在 Canvas 上方覆盖一层透明的 HTML 文本，与图片中的文字完全重合。
+      // 用户选中的其实是这层透明的 HTML 文本。
       if (textLayerRef.current) {
          const textLayerDiv = textLayerRef.current;
          textLayerDiv.innerHTML = "";
@@ -338,6 +341,17 @@ const PDFPage: React.FC<PDFPageProps> = ({
     };
   };
 
+  /**
+   * 智能文本选择 (Smart Text Selection)
+   * 
+   * PDF.js 的渲染层通常包含大量的空白区域（Margins/Padding）。
+   * 默认情况下，在这些空白区域点击或拖拽无法选中文本。
+   * 
+   * 此函数实现了以下功能：
+   * 1. 点击定位：点击空白处时，自动找到最近的文本节点。
+   * 2. 拖拽选择：允许从页边距或行间距开始拖拽选择文本。
+   * 3. 智能吸附：根据鼠标位置判断是选中当前行的开头还是结尾。
+   */
   const handleMouseDown = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.tagName === 'SPAN') return;

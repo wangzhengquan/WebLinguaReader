@@ -4,7 +4,9 @@ import { PDFDocumentProxy, PDFPageProxy, PDFOutlineItem } from '../types';
 // Handle potential default export structure from different CDNs/bundlers
 const pdfjs = (pdfjsLib as any).default || pdfjsLib;
 
-// Initialize worker with matching version
+// 配置 PDF.js 的后台工作线程 (Web Worker)。
+// 作用：开启多线程以提升性能，将耗时的 PDF 解析任务放到后台线程运行，防止主线程卡顿。
+// 注意：版本号 (3.11.174) 必须与主包 pdfjs-dist 的版本完全一致，否则会导致加载失败。
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
 export { pdfjs };
