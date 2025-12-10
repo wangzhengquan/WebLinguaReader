@@ -421,12 +421,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
                  if (layer) {
                      const layerSpans = Array.from(layer.children) as HTMLElement[];
                      
-                     // Row Priority Logic:
+                     // Row Priority Logic with Multi-column Support:
                      // 1. First, check if mouse is vertically aligned with any line (Y-Axis Match).
-                     //    If so, only consider spans on that line. This prevents jumping to the next paragraph
-                     //    when dragging far right into the margin.
-                     // 2. If no line match (in vertical whitespace), use Euclidean distance.
-
                      const lineSpans = layerSpans.filter(s => {
                         const r = s.getBoundingClientRect();
                         // 5px buffer for mouse jitter
@@ -436,15 +432,32 @@ const PDFPage: React.FC<PDFPageProps> = ({
                      let closest = null;
 
                      if (lineSpans.length > 0) {
-                         // We are on a line. Find span closest horizontally.
-                         let minXDist = Infinity;
-                         for (const s of lineSpans) {
-                             const r = s.getBoundingClientRect();
-                             // Horizontal distance to span edges
-                             const dx = Math.max(r.left - ev.clientX, 0, ev.clientX - r.right);
-                             if (dx < minXDist) {
-                                 minXDist = dx;
-                                 closest = s;
+                         // We are on a line. 
+                         // To handle multi-column layouts correctly, if we are in whitespace between columns,
+                         // we want to prioritize text to the RIGHT of the cursor (Start of right column)
+                         // rather than text to the LEFT (End of left column).
+                         
+                         const rightCandidates = lineSpans.filter(s => s.getBoundingClientRect().left > ev.clientX);
+                         
+                         if (rightCandidates.length > 0) {
+                             // Pick the leftmost span among those to the right (the closest one)
+                             closest = rightCandidates.reduce((prev, curr) => {
+                                 const rPrev = prev.getBoundingClientRect();
+                                 const rCurr = curr.getBoundingClientRect();
+                                 return rCurr.left < rPrev.left ? curr : prev;
+                             });
+                         } else {
+                             // No spans to the right (or we are in right margin).
+                             // Find closest span generally (which will be to the left or under cursor)
+                             let minXDist = Infinity;
+                             for (const s of lineSpans) {
+                                 const r = s.getBoundingClientRect();
+                                 // Horizontal distance to span edges
+                                 const dx = Math.max(r.left - ev.clientX, 0, ev.clientX - r.right);
+                                 if (dx < minXDist) {
+                                     minXDist = dx;
+                                     closest = s;
+                                 }
                              }
                          }
                      } else {
