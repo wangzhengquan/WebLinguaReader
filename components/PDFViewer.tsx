@@ -39,11 +39,22 @@ const PDFPage: React.FC<PDFPageProps> = ({
   
   const [renderedScale, setRenderedScale] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
+  
+  // Unified rendering state
+  // Initialized by forcePreload, updated by IntersectionObserver or prop change
+  const [shouldRender, setShouldRender] = useState(forcePreload);
+  
   // Initialize with null to indicate "loading dimensions"
   const [dimensions, setDimensions] = useState<{width: number, height: number} | null>(null);
   const renderTaskRef = useRef<any>(null);
   const [highlights, setHighlights] = useState<DOMRect[]>([]);
+
+  // Update state if forcePreload changes
+  useEffect(() => {
+    if (forcePreload) {
+      setShouldRender(true);
+    }
+  }, [forcePreload]);
 
   // 1. Eagerly fetch page dimensions (Layout Phase)
   useEffect(() => {
@@ -64,8 +75,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
   }, [pdfDocument, pageNumber, scale]);
 
 
-  // 2. Intersection Observer (Paint Phase) - Persist Render
+  // 2. Intersection Observer (Paint Phase) - Trigger Render
   useEffect(() => {
+    // If already rendering (due to preload or previous visit), we don't need to observe
+    if (shouldRender) return;
+
     const element = wrapperRef.current;
     if (!element) return;
 
@@ -73,10 +87,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            setIsVisible(true);
-            // We do NOT set isVisible to false when leaving.
-            // This keeps the canvas in memory to prevent blank flashes.
-            observer.disconnect(); // Once visible, we don't need to observe anymore
+            setShouldRender(true);
+            observer.disconnect(); // Once triggered, we stay rendered
           }
         });
       },
@@ -92,7 +104,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
     return () => {
       observer.disconnect();
     };
-  }, [pageNumber]); // Re-run if page number changes (reused component)
+  }, [pageNumber, shouldRender]); 
 
 
   // 3. Extract text when page becomes active (Logic Phase)
@@ -109,7 +121,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
   // 4. Robust Text Highlighting Logic (Interactive Phase)
   useEffect(() => {
-    const shouldRender = isVisible || forcePreload;
     if (!highlightedText || !textLayerRef.current || !shouldRender) {
       setHighlights([]);
       return;
@@ -203,14 +214,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
     }, 50);
 
     return () => clearTimeout(timer);
-  }, [highlightedText, isVisible, forcePreload, isActivePage]);
+  }, [highlightedText, shouldRender, isActivePage]);
 
 
   // 5. Main Rendering Logic (Paint Phase)
   useEffect(() => {
-    // Render if visible in viewport OR forced to preload
-    const shouldRender = isVisible || forcePreload;
-
     if (!shouldRender || !dimensions) return; 
 
     // Skip re-render if scale hasn't changed effectively
@@ -317,7 +325,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
         renderTaskRef.current = null;
       }
     };
-  }, [isVisible, forcePreload, pdfDocument, pageNumber, scale, dimensions]);
+  }, [shouldRender, pdfDocument, pageNumber, scale, dimensions]);
 
   const getRelativeRect = (rect: DOMRect) => {
     if (!textLayerRef.current) return rect;
@@ -465,7 +473,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
   const width = dimensions ? dimensions.width : 600;
   const height = dimensions ? dimensions.height : 800;
-  const shouldRender = isVisible || forcePreload;
 
   return (
     <div 
