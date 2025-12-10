@@ -354,88 +354,102 @@ const PDFPage: React.FC<PDFPageProps> = ({
    */
   const handleMouseDown = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    // If user clicked directly on text, let browser handle it
-    if (target.tagName === 'SPAN') return;
-
     const textLayer = textLayerRef.current;
     if (!textLayer) return;
 
-    const x = e.clientX;
-    const y = e.clientY;
+    // Determine if we are starting from text (Native) or whitespace (Custom)
+    const isNativeStart = target.tagName === 'SPAN';
 
-    const spans = Array.from(textLayer.children) as HTMLElement[];
-    if (spans.length === 0) return;
+    let success = false;
 
-    let bestSpan: HTMLElement | null = null;
-    
-    // Improved "Best Span" search for multi-column layouts using Distance Priority
-    const yBuffer = 10;
-    const sameLineSpans = spans.filter(s => {
-        const r = s.getBoundingClientRect();
-        return y >= (r.top - yBuffer) && y <= (r.bottom + yBuffer);
-    });
+    // Logic for Custom Start (Whitespace)
+    if (!isNativeStart) {
+        const x = e.clientX;
+        const y = e.clientY;
 
-    if (sameLineSpans.length > 0) {
-        // Find closest span on the same line (left or right)
-        const leftSpans = sameLineSpans.filter(s => s.getBoundingClientRect().right <= x);
-        const rightSpans = sameLineSpans.filter(s => s.getBoundingClientRect().left >= x);
+        const spans = Array.from(textLayer.children) as HTMLElement[];
+        if (spans.length === 0) return;
 
-        let bestLeft: HTMLElement | null = null;
-        let bestRight: HTMLElement | null = null;
-
-        if (leftSpans.length > 0) {
-            bestLeft = leftSpans.reduce((p, c) => c.getBoundingClientRect().right > p.getBoundingClientRect().right ? c : p);
-        }
-        if (rightSpans.length > 0) {
-            bestRight = rightSpans.reduce((p, c) => c.getBoundingClientRect().left < p.getBoundingClientRect().left ? c : p);
-        }
-
-        if (bestLeft && bestRight) {
-            const distLeft = x - bestLeft.getBoundingClientRect().right;
-            const distRight = bestRight.getBoundingClientRect().left - x;
-            bestSpan = (distLeft <= distRight) ? bestLeft : bestRight;
-        } else if (bestLeft) {
-            bestSpan = bestLeft;
-        } else if (bestRight) {
-            bestSpan = bestRight;
-        }
-
-    } else {
-        // No text on this line. Find closest below (Fallback)
-        let minDist = Infinity;
-        for (const s of spans) {
+        let bestSpan: HTMLElement | null = null;
+        
+        // Improved "Best Span" search for multi-column layouts using Distance Priority
+        const yBuffer = 10;
+        const sameLineSpans = spans.filter(s => {
             const r = s.getBoundingClientRect();
-            // Only look downwards
-            if (r.top > y) {
-                const dy = r.top - y;
-                const dx = Math.abs(r.left - x);
-                // Weighted score: Y distance is more important
-                const score = dy * 10 + dx; 
-                if (score < minDist) {
-                    minDist = score;
-                    bestSpan = s;
+            return y >= (r.top - yBuffer) && y <= (r.bottom + yBuffer);
+        });
+
+        if (sameLineSpans.length > 0) {
+            // Find closest span on the same line (left or right)
+            const leftSpans = sameLineSpans.filter(s => s.getBoundingClientRect().right <= x);
+            const rightSpans = sameLineSpans.filter(s => s.getBoundingClientRect().left >= x);
+
+            let bestLeft: HTMLElement | null = null;
+            let bestRight: HTMLElement | null = null;
+
+            if (leftSpans.length > 0) {
+                bestLeft = leftSpans.reduce((p, c) => c.getBoundingClientRect().right > p.getBoundingClientRect().right ? c : p);
+            }
+            if (rightSpans.length > 0) {
+                bestRight = rightSpans.reduce((p, c) => c.getBoundingClientRect().left < p.getBoundingClientRect().left ? c : p);
+            }
+
+            if (bestLeft && bestRight) {
+                const distLeft = x - bestLeft.getBoundingClientRect().right;
+                const distRight = bestRight.getBoundingClientRect().left - x;
+                bestSpan = (distLeft <= distRight) ? bestLeft : bestRight;
+            } else if (bestLeft) {
+                bestSpan = bestLeft;
+            } else if (bestRight) {
+                bestSpan = bestRight;
+            }
+
+        } else {
+            // No text on this line. Find closest below (Fallback)
+            let minDist = Infinity;
+            for (const s of spans) {
+                const r = s.getBoundingClientRect();
+                // Only look downwards
+                if (r.top > y) {
+                    const dy = r.top - y;
+                    const dx = Math.abs(r.left - x);
+                    // Weighted score: Y distance is more important
+                    const score = dy * 10 + dx; 
+                    if (score < minDist) {
+                        minDist = score;
+                        bestSpan = s;
+                    }
                 }
             }
         }
+
+        if (bestSpan && bestSpan.firstChild) {
+            e.preventDefault(); 
+            
+            const selection = window.getSelection();
+            const range = document.createRange();
+            
+            // Smart Anchor:
+            // If we picked a span to the right (Left Margin click), start at 0.
+            // If we picked a span to the left (Right Margin click), start at end.
+            const r = bestSpan.getBoundingClientRect();
+            const offset = (r.left >= x) ? 0 : (bestSpan.textContent?.length || 0);
+
+            range.setStart(bestSpan.firstChild, offset);
+            range.collapse(true);
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+            
+            success = true;
+        }
+    } else {
+        // Native start (clicked on text)
+        // We don't prevent default, letting browser handle initial caret placement.
+        // But we DO attach listeners to handle dragging into whitespace.
+        success = true;
     }
 
-    if (bestSpan && bestSpan.firstChild) {
-        e.preventDefault(); 
-        
-        const selection = window.getSelection();
-        const range = document.createRange();
-        
-        // Smart Anchor:
-        // If we picked a span to the right (Left Margin click), start at 0.
-        // If we picked a span to the left (Right Margin click), start at end.
-        const r = bestSpan.getBoundingClientRect();
-        const offset = (r.left >= x) ? 0 : (bestSpan.textContent?.length || 0);
-
-        range.setStart(bestSpan.firstChild, offset);
-        range.collapse(true);
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-
+    if (success) {
         const startX = e.clientX;
         const startY = e.clientY;
         let isDragging = false;
@@ -453,16 +467,27 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
              let extendNode: Node | null = null;
              let offset = 0;
+             let shouldUseCustomLogic = false;
 
-             // Optimization: If directly hovering a text span, snap to it immediately
+             // Check if we are hovering a text span
              if (moveTarget.tagName === 'SPAN' && moveTarget.parentElement?.classList.contains('textLayer')) {
-                 extendNode = moveTarget.firstChild;
-                 const r = moveTarget.getBoundingClientRect();
-                 if (ev.clientX > r.left + r.width/2) {
-                     offset = moveTarget.textContent?.length || 0;
+                 if (isNativeStart) {
+                     // If we started natively and are on text, let browser handle precision selection
+                     return;
+                 } else {
+                     // Started in whitespace, landed on text. Use coarse snap.
+                     extendNode = moveTarget.firstChild;
+                     const r = moveTarget.getBoundingClientRect();
+                     if (ev.clientX > r.left + r.width/2) {
+                         offset = moveTarget.textContent?.length || 0;
+                     }
+                     shouldUseCustomLogic = true;
                  }
              } else {
-                 // Smart Search in Margin/Whitespace
+                 // Hovering Whitespace/Margin -> ALWAYS use Smart Logic
+                 // This fixes the bug where dragging from Text -> Whitespace selects too much
+                 shouldUseCustomLogic = true;
+                 
                  const pageWrapper = moveTarget.closest('.relative');
                  const layer = pageWrapper?.querySelector('.textLayer');
                  if (layer) {
@@ -528,7 +553,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
                  }
              }
 
-             if (extendNode) {
+             if (shouldUseCustomLogic && extendNode) {
                  window.getSelection()?.extend(extendNode, offset);
              }
         };
@@ -537,8 +562,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
             
-            if (!isDragging) {
-                // If it was just a click without significant drag, clear the selection
+            if (!isDragging && !isNativeStart) {
+                // If it was just a click (in whitespace) without significant drag, clear the selection
                 window.getSelection()?.removeAllRanges();
                 return;
             }
