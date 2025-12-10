@@ -23,6 +23,132 @@ interface PDFPageProps {
   forcePreload: boolean;
 }
 
+/**
+ * Helper: Find closest text node with Strict Row Priority.
+ * Prevents selecting adjacent lines when in margins.
+ */
+const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElement) => {
+  const spans = Array.from(layer.children) as HTMLElement[];
+  if (spans.length === 0) return null;
+
+  // 1. Identify "Visual Row"
+  // Strict vertical check: Cursor MUST be between top and bottom of the span
+  const rowSpans = spans.filter(s => {
+      const r = s.getBoundingClientRect();
+      return clientY >= r.top && clientY <= r.bottom;
+  });
+
+  // If on a row (or horizontal margin of a row)
+  if (rowSpans.length > 0) {
+      // Sort by X position
+      rowSpans.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+      
+      const firstSpan = rowSpans[0];
+      const lastSpan = rowSpans[rowSpans.length - 1];
+      const firstRect = firstSpan.getBoundingClientRect();
+      const lastRect = lastSpan.getBoundingClientRect();
+
+      // Left Margin -> Start of First Span
+      if (clientX < firstRect.left) {
+          return { node: firstSpan.firstChild, offset: 0 };
+      }
+      
+      // Right Margin -> End of Last Span
+      if (clientX > lastRect.right) {
+          return { node: lastSpan.firstChild, offset: lastSpan.textContent?.length || 0 };
+      }
+
+      // Inside the row (between words or columns)
+      for (let i = 0; i < rowSpans.length; i++) {
+           const span = rowSpans[i];
+           const r = span.getBoundingClientRect();
+           
+           // Hovering this span
+           if (clientX >= r.left && clientX <= r.right) {
+               // Try high-precision selection if native API supports it
+               const doc = document as any;
+               if (doc.caretPositionFromPoint) {
+                  const pos = doc.caretPositionFromPoint(clientX, clientY);
+                  if (pos && pos.offsetNode === span.firstChild) {
+                      return { node: span.firstChild, offset: pos.offset };
+                  }
+               } else if (doc.caretRangeFromPoint) {
+                  const range = doc.caretRangeFromPoint(clientX, clientY);
+                  if (range && range.startContainer === span.firstChild) {
+                      return { node: span.firstChild, offset: range.startOffset };
+                  }
+               }
+               
+               // Fallback to simpler midpoint check
+               return { node: span.firstChild, offset: clientX > (r.left + r.width/2) ? (span.textContent?.length||0) : 0 };
+           }
+
+           // Gutter between this and next
+           if (i < rowSpans.length - 1) {
+               const nextSpan = rowSpans[i+1];
+               const nextR = nextSpan.getBoundingClientRect();
+               if (clientX > r.right && clientX < nextR.left) {
+                   const distLeft = clientX - r.right;
+                   const distRight = nextR.left - clientX;
+                   if (distLeft <= distRight) {
+                       return { node: span.firstChild, offset: span.textContent?.length || 0 };
+                   } else {
+                       return { node: nextSpan.firstChild, offset: 0 };
+                   }
+               }
+           }
+      }
+  } 
+  
+  // 2. Vertical Gap (Cursor is strictly between lines)
+  // Find closest span vertically to respect user intent
+  let bestSpan: HTMLElement | null = null;
+  let minVerticalDist = Infinity;
+  
+  for (const s of spans) {
+      const r = s.getBoundingClientRect();
+      
+      let dist = 0;
+      if (clientY < r.top) dist = r.top - clientY;
+      else if (clientY > r.bottom) dist = clientY - r.bottom;
+      else dist = 0; // Should have been caught above
+      
+      if (dist < minVerticalDist) {
+          minVerticalDist = dist;
+          bestSpan = s;
+      } else if (dist === minVerticalDist && bestSpan) {
+           // Tie-breaker: X distance
+           const currX = Math.min(Math.abs(clientX - r.left), Math.abs(clientX - r.right));
+           const bestX = Math.min(Math.abs(clientX - bestSpan.getBoundingClientRect().left), Math.abs(clientX - bestSpan.getBoundingClientRect().right));
+           if (currX < bestX) bestSpan = s;
+      }
+  }
+
+  if (bestSpan) {
+      const r = bestSpan.getBoundingClientRect();
+      // If cursor is below span -> End of span (dragging down)
+      if (clientY > r.bottom) return { node: bestSpan.firstChild, offset: bestSpan.textContent?.length || 0 };
+      // If cursor is above span -> Start of span (dragging up)
+      if (clientY < r.top) return { node: bestSpan.firstChild, offset: 0 };
+      
+      // Fallback
+      if (clientX > r.right) return { node: bestSpan.firstChild, offset: bestSpan.textContent?.length || 0 };
+      return { node: bestSpan.firstChild, offset: 0 };
+  }
+
+  return null;
+};
+
+const getRelativeRect = (rect: DOMRect, layer: HTMLElement) => {
+  const layerRect = layer.getBoundingClientRect();
+  return {
+      top: rect.top - layerRect.top,
+      left: rect.left - layerRect.left,
+      width: rect.width,
+      height: rect.height
+  };
+};
+
 // Sub-component for individual pages
 const PDFPage: React.FC<PDFPageProps> = ({ 
   pageNumber, 
@@ -319,132 +445,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
     };
   }, [shouldRender, pdfDocument, pageNumber, scale, dimensions]);
 
-  const getRelativeRect = (rect: DOMRect) => {
-    if (!textLayerRef.current) return rect;
-    const layerRect = textLayerRef.current.getBoundingClientRect();
-    return {
-        top: rect.top - layerRect.top,
-        left: rect.left - layerRect.left,
-        width: rect.width,
-        height: rect.height
-    };
-  };
-
-  /**
-   * Helper: Find closest text node with Strict Row Priority.
-   * Prevents selecting adjacent lines when in margins.
-   */
-  const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElement) => {
-    const spans = Array.from(layer.children) as HTMLElement[];
-    if (spans.length === 0) return null;
-
-    // 1. Identify "Visual Row"
-    // Strict vertical check: Cursor MUST be between top and bottom of the span
-    const rowSpans = spans.filter(s => {
-        const r = s.getBoundingClientRect();
-        return clientY >= r.top && clientY <= r.bottom;
-    });
-
-    // If on a row (or horizontal margin of a row)
-    if (rowSpans.length > 0) {
-        // Sort by X position
-        rowSpans.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-        
-        const firstSpan = rowSpans[0];
-        const lastSpan = rowSpans[rowSpans.length - 1];
-        const firstRect = firstSpan.getBoundingClientRect();
-        const lastRect = lastSpan.getBoundingClientRect();
-
-        // Left Margin -> Start of First Span
-        if (clientX < firstRect.left) {
-            return { node: firstSpan.firstChild, offset: 0 };
-        }
-        
-        // Right Margin -> End of Last Span
-        if (clientX > lastRect.right) {
-            return { node: lastSpan.firstChild, offset: lastSpan.textContent?.length || 0 };
-        }
-
-        // Inside the row (between words or columns)
-        for (let i = 0; i < rowSpans.length; i++) {
-             const span = rowSpans[i];
-             const r = span.getBoundingClientRect();
-             
-             // Hovering this span
-             if (clientX >= r.left && clientX <= r.right) {
-                 // Try high-precision selection if native API supports it
-                 const doc = document as any;
-                 if (doc.caretPositionFromPoint) {
-                    const pos = doc.caretPositionFromPoint(clientX, clientY);
-                    if (pos && pos.offsetNode === span.firstChild) {
-                        return { node: span.firstChild, offset: pos.offset };
-                    }
-                 } else if (doc.caretRangeFromPoint) {
-                    const range = doc.caretRangeFromPoint(clientX, clientY);
-                    if (range && range.startContainer === span.firstChild) {
-                        return { node: span.firstChild, offset: range.startOffset };
-                    }
-                 }
-                 
-                 // Fallback to simpler midpoint check
-                 return { node: span.firstChild, offset: clientX > (r.left + r.width/2) ? (span.textContent?.length||0) : 0 };
-             }
-
-             // Gutter between this and next
-             if (i < rowSpans.length - 1) {
-                 const nextSpan = rowSpans[i+1];
-                 const nextR = nextSpan.getBoundingClientRect();
-                 if (clientX > r.right && clientX < nextR.left) {
-                     const distLeft = clientX - r.right;
-                     const distRight = nextR.left - clientX;
-                     if (distLeft <= distRight) {
-                         return { node: span.firstChild, offset: span.textContent?.length || 0 };
-                     } else {
-                         return { node: nextSpan.firstChild, offset: 0 };
-                     }
-                 }
-             }
-        }
-    } 
-    
-    // 2. Vertical Gap (Cursor is strictly between lines)
-    // Find closest span vertically to respect user intent
-    let bestSpan: HTMLElement | null = null;
-    let minVerticalDist = Infinity;
-    
-    for (const s of spans) {
-        const r = s.getBoundingClientRect();
-        
-        let dist = 0;
-        if (clientY < r.top) dist = r.top - clientY;
-        else if (clientY > r.bottom) dist = clientY - r.bottom;
-        else dist = 0; // Should have been caught above
-        
-        if (dist < minVerticalDist) {
-            minVerticalDist = dist;
-            bestSpan = s;
-        } else if (dist === minVerticalDist && bestSpan) {
-             // Tie-breaker: X distance
-             const currX = Math.min(Math.abs(clientX - r.left), Math.abs(clientX - r.right));
-             const bestX = Math.min(Math.abs(clientX - bestSpan.getBoundingClientRect().left), Math.abs(clientX - bestSpan.getBoundingClientRect().right));
-             if (currX < bestX) bestSpan = s;
-        }
-    }
-
-    if (bestSpan) {
-        const r = bestSpan.getBoundingClientRect();
-        // If cursor is below span -> End of span (dragging down)
-        if (clientY > r.bottom) return { node: bestSpan.firstChild, offset: bestSpan.textContent?.length || 0 };
-        // If cursor is above span -> Start of span (dragging up)
-        if (clientY < r.top) return { node: bestSpan.firstChild, offset: 0 };
-        
-        // Fallback
-        if (clientX > r.right) return { node: bestSpan.firstChild, offset: bestSpan.textContent?.length || 0 };
-        return { node: bestSpan.firstChild, offset: 0 };
-    }
-
-    return null;
-  };
 
   /**
    * 智能文本选择 (Smart Text Selection)
@@ -527,7 +527,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
                 <canvas ref={canvasRef} className="block" />
                 <div ref={textLayerRef} className="textLayer absolute inset-0 origin-top-left" />
                 {highlights.map((rect, i) => {
-                    const rel = getRelativeRect(rect);
+                    const rel = textLayerRef.current ? getRelativeRect(rect, textLayerRef.current) : rect;
                     return (
                         <div 
                             key={i}
