@@ -31,6 +31,18 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
   const spans = Array.from(layer.children) as HTMLElement[];
   if (spans.length === 0) return null;
 
+  // Helper to handle void elements (like <br>) or empty spans
+  // If firstChild (TextNode) is null, return the element itself with offset 0.
+  const getSafeResult = (span: HTMLElement, atEnd: boolean) => {
+      if (span.firstChild) {
+          return { 
+              node: span.firstChild, 
+              offset: atEnd ? (span.textContent?.length || 0) : 0 
+          };
+      }
+      return { node: span, offset: 0 };
+  };
+
   // 1. Identify "Visual Row"
   // Strict vertical check: Cursor MUST be between top and bottom of the span
   const rowSpans = spans.filter(s => {
@@ -50,12 +62,12 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
 
       // Left Margin -> Start of First Span
       if (clientX < firstRect.left) {
-          return { node: firstSpan.firstChild, offset: 0 };
+          return getSafeResult(firstSpan, false);
       }
       
       // Right Margin -> End of Last Span
       if (clientX > lastRect.right) {
-          return { node: lastSpan.firstChild, offset: lastSpan.textContent?.length || 0 };
+          return getSafeResult(lastSpan, true);
       }
 
       // Inside the row (between words or columns)
@@ -69,18 +81,19 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
                const doc = document as any;
                if (doc.caretPositionFromPoint) {
                   const pos = doc.caretPositionFromPoint(clientX, clientY);
-                  if (pos && pos.offsetNode === span.firstChild) {
-                      return { node: span.firstChild, offset: pos.offset };
+                  if (pos && (pos.offsetNode === span.firstChild || pos.offsetNode === span)) {
+                      return { node: pos.offsetNode, offset: pos.offset };
                   }
                } else if (doc.caretRangeFromPoint) {
                   const range = doc.caretRangeFromPoint(clientX, clientY);
-                  if (range && range.startContainer === span.firstChild) {
-                      return { node: span.firstChild, offset: range.startOffset };
+                  if (range && (range.startContainer === span.firstChild || range.startContainer === span)) {
+                      return { node: range.startContainer, offset: range.startOffset };
                   }
                }
                
                // Fallback to simpler midpoint check
-               return { node: span.firstChild, offset: clientX > (r.left + r.width/2) ? (span.textContent?.length||0) : 0 };
+               const isAtEnd = clientX > (r.left + r.width/2);
+               return getSafeResult(span, isAtEnd);
            }
 
            // Gutter between this and next
@@ -91,9 +104,9 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
                    const distLeft = clientX - r.right;
                    const distRight = nextR.left - clientX;
                    if (distLeft <= distRight) {
-                       return { node: span.firstChild, offset: span.textContent?.length || 0 };
+                       return getSafeResult(span, true);
                    } else {
-                       return { node: nextSpan.firstChild, offset: 0 };
+                       return getSafeResult(nextSpan, false);
                    }
                }
            }
@@ -127,13 +140,13 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
   if (bestSpan) {
       const r = bestSpan.getBoundingClientRect();
       // If cursor is below span -> End of span (dragging down)
-      if (clientY > r.bottom) return { node: bestSpan.firstChild, offset: bestSpan.textContent?.length || 0 };
+      if (clientY > r.bottom) return getSafeResult(bestSpan, true);
       // If cursor is above span -> Start of span (dragging up)
-      if (clientY < r.top) return { node: bestSpan.firstChild, offset: 0 };
+      if (clientY < r.top) return getSafeResult(bestSpan, false);
       
       // Fallback
-      if (clientX > r.right) return { node: bestSpan.firstChild, offset: bestSpan.textContent?.length || 0 };
-      return { node: bestSpan.firstChild, offset: 0 };
+      if (clientX > r.right) return getSafeResult(bestSpan, true);
+      return getSafeResult(bestSpan, false);
   }
 
   return null;
