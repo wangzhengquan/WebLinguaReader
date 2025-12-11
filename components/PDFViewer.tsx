@@ -139,14 +139,36 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
 
   if (bestSpan) {
       const r = bestSpan.getBoundingClientRect();
-      // If cursor is below span -> End of span (dragging down)
-      if (clientY > r.bottom) return getSafeResult(bestSpan, true);
-      // If cursor is above span -> Start of span (dragging up)
-      if (clientY < r.top) return getSafeResult(bestSpan, false);
       
-      // Fallback
+      // Use X position to determine offset, ignoring vertical drift
+      // This ensures that if the user drifts up/down while selecting a line,
+      // the selection follows the X cursor instead of snapping to Start/End of line based on Y.
+      
+      // Left of span
+      if (clientX < r.left) return getSafeResult(bestSpan, false);
+      // Right of span
       if (clientX > r.right) return getSafeResult(bestSpan, true);
-      return getSafeResult(bestSpan, false);
+      
+      // Horizontally inside the span, but vertically outside
+      // Attempt to find precise offset by mocking the Y coordinate to be inside the span (project to center)
+      const doc = document as any;
+      const centerY = r.top + (r.height / 2);
+      
+      if (doc.caretPositionFromPoint) {
+          const pos = doc.caretPositionFromPoint(clientX, centerY);
+          if (pos && (pos.offsetNode === bestSpan.firstChild || pos.offsetNode === bestSpan)) {
+              return { node: pos.offsetNode, offset: pos.offset };
+          }
+      } else if (doc.caretRangeFromPoint) {
+          const range = doc.caretRangeFromPoint(clientX, centerY);
+          if (range && (range.startContainer === bestSpan.firstChild || range.startContainer === bestSpan)) {
+              return { node: range.startContainer, offset: range.startOffset };
+          }
+      }
+
+      // Fallback
+      const isAtEnd = clientX > (r.left + r.width/2);
+      return getSafeResult(bestSpan, isAtEnd);
   }
 
   return null;
