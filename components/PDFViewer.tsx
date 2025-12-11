@@ -23,6 +23,14 @@ interface PDFPageProps {
   forcePreload: boolean;
 }
 
+const getSelectionRect = () => {
+  const selection = window.getSelection();
+  if( selection && selection.rangeCount > 0) {
+    return selection.getRangeAt(0).getBoundingClientRect();
+  }
+  return null;
+}
+
 /**
  * Helper: Find closest text node with Strict Row Priority.
  * Prevents selecting adjacent lines when in margins.
@@ -34,13 +42,10 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
   // Helper to handle void elements (like <br>) or empty spans
   // If firstChild (TextNode) is null, return the element itself with offset 0.
   const getSafeResult = (span: HTMLElement, atEnd: boolean) => {
-      if (span.firstChild) {
-          return { 
-              node: span.firstChild, 
-              offset: atEnd ? (span.textContent?.length || 0) : 0 
-          };
-      }
-      return { node: span, offset: 0 };
+    return { 
+      node: span.firstChild, 
+      offset: atEnd ? (span.textContent?.length || 0) : 0 
+    };
   };
 
   // 1. Identify "Visual Row"
@@ -67,112 +72,91 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
       
       // Right Margin -> End of Last Span
       if (clientX > lastRect.right) {
-          return getSafeResult(lastSpan, true);
+        const r = getSelectionRect();
+        if (r && r.left > lastRect.right) {
+          return null;
+        }
+        return getSafeResult(lastSpan, true);
       }
 
       // Inside the row (between words or columns)
       for (let i = 0; i < rowSpans.length; i++) {
-           const span = rowSpans[i];
-           const r = span.getBoundingClientRect();
-           
-           // Hovering this span
-           if (clientX >= r.left && clientX <= r.right) {
-               // Try high-precision selection if native API supports it
-               const doc = document as any;
-               if (doc.caretPositionFromPoint) {
-                  const pos = doc.caretPositionFromPoint(clientX, clientY);
-                  if (pos && (pos.offsetNode === span.firstChild || pos.offsetNode === span)) {
-                      return { node: pos.offsetNode, offset: pos.offset };
-                  }
-               } else if (doc.caretRangeFromPoint) {
-                  const range = doc.caretRangeFromPoint(clientX, clientY);
-                  if (range && (range.startContainer === span.firstChild || range.startContainer === span)) {
-                      return { node: range.startContainer, offset: range.startOffset };
-                  }
-               }
-               
-               // Fallback to simpler midpoint check
-               const isAtEnd = clientX > (r.left + r.width/2);
-               return getSafeResult(span, isAtEnd);
-           }
+        const span = rowSpans[i];
+        const r = span.getBoundingClientRect();
+        
+        // Hovering this span
+        if (clientX >= r.left && clientX <= r.right) {
+            // Try high-precision selection if native API supports it
+            const doc = document as any;
+            if (doc.caretPositionFromPoint) {
+              const pos = doc.caretPositionFromPoint(clientX, clientY);
+              if (pos && (pos.offsetNode === span.firstChild || pos.offsetNode === span)) {
+                  return { node: pos.offsetNode, offset: pos.offset };
+              }
+            } else if (doc.caretRangeFromPoint) {
+              const range = doc.caretRangeFromPoint(clientX, clientY);
+              if (range && (range.startContainer === span.firstChild || range.startContainer === span)) {
+                  return { node: range.startContainer, offset: range.startOffset };
+              }
+            }
+            
+            // Fallback to simpler midpoint check
+            const isAtEnd = clientX > (r.left + r.width/2);
+            return getSafeResult(span, isAtEnd);
+        }
 
-           // Gutter between this and next
-           if (i < rowSpans.length - 1) {
-               const nextSpan = rowSpans[i+1];
-               const nextR = nextSpan.getBoundingClientRect();
-               if (clientX > r.right && clientX < nextR.left) {
-                   const distLeft = clientX - r.right;
-                   const distRight = nextR.left - clientX;
-                   if (distLeft <= distRight) {
-                       return getSafeResult(span, true);
-                   } else {
-                       return getSafeResult(nextSpan, false);
-                   }
-               }
-           }
+        // Gutter between this and next
+        if (i < rowSpans.length - 1) {
+          const r = getSelectionRect();
+          if(r) {
+            const nextSpan = rowSpans[i+1];
+            const nextR = nextSpan.getBoundingClientRect();
+            
+            if (clientX > r.right && clientX < nextR.left) {
+              const distLeft = clientX - r.right;
+              const distRight = nextR.left - clientX;
+              if (distLeft <= distRight) {
+                  return getSafeResult(span, true);
+              } else {
+                  return getSafeResult(nextSpan, false);
+              }
+            }
+          }
+        }
       }
   } 
-  
-  // 2. Vertical Gap (Cursor is strictly between lines)
-  // Find closest span vertically to respect user intent
-  let bestSpan: HTMLElement | null = null;
-  let minVerticalDist = Infinity;
-  
-  for (const s of spans) {
-      const r = s.getBoundingClientRect();
-      
-      let dist = 0;
-      if (clientY < r.top) dist = r.top - clientY;
-      else if (clientY > r.bottom) dist = clientY - r.bottom;
-      else dist = 0; // Should have been caught above
-      
-      if (dist < minVerticalDist) {
-          minVerticalDist = dist;
-          bestSpan = s;
-      } else if (dist === minVerticalDist && bestSpan) {
-           // Tie-breaker: X distance
-           const currX = Math.min(Math.abs(clientX - r.left), Math.abs(clientX - r.right));
-           const bestX = Math.min(Math.abs(clientX - bestSpan.getBoundingClientRect().left), Math.abs(clientX - bestSpan.getBoundingClientRect().right));
-           if (currX < bestX) bestSpan = s;
-      }
-  }
-
-  if (bestSpan) {
-      const r = bestSpan.getBoundingClientRect();
-      
-      // Use X position to determine offset, ignoring vertical drift
-      // This ensures that if the user drifts up/down while selecting a line,
-      // the selection follows the X cursor instead of snapping to Start/End of line based on Y.
-      
-      // Left of span
-      if (clientX < r.left) return getSafeResult(bestSpan, false);
-      // Right of span
-      if (clientX > r.right) return getSafeResult(bestSpan, true);
-      
-      // Horizontally inside the span, but vertically outside
-      // Attempt to find precise offset by mocking the Y coordinate to be inside the span (project to center)
-      const doc = document as any;
-      const centerY = r.top + (r.height / 2);
-      
-      if (doc.caretPositionFromPoint) {
-          const pos = doc.caretPositionFromPoint(clientX, centerY);
-          if (pos && (pos.offsetNode === bestSpan.firstChild || pos.offsetNode === bestSpan)) {
-              return { node: pos.offsetNode, offset: pos.offset };
-          }
-      } else if (doc.caretRangeFromPoint) {
-          const range = doc.caretRangeFromPoint(clientX, centerY);
-          if (range && (range.startContainer === bestSpan.firstChild || range.startContainer === bestSpan)) {
-              return { node: range.startContainer, offset: range.startOffset };
-          }
-      }
-
-      // Fallback
-      const isAtEnd = clientX > (r.left + r.width/2);
-      return getSafeResult(bestSpan, isAtEnd);
-  }
-
   return null;
 };
+
+const findStartClosestSpan = (clientX: number, clientY: number, layer: HTMLElement) => {
+  const res = findClosestTextNode(clientX, clientY, layer);
+  if(res && res.node) return res;
+
+  const spans = Array.from(layer.children) as HTMLElement[];
+  if (spans.length === 0) return null;
+
+  let span;
+  let minDist = Infinity;
+  for (const s of spans) {
+    if(s.firstChild == null) continue;
+    const r = s.getBoundingClientRect();
+    const x = r.left - clientX ;
+    const y = r.top + r.height / 2 - clientY ;
+    
+    if (x >= 0 && y >= 0){
+      // x 权重小
+      const dist = x * x * 0.25 + y * y;
+      if (dist < minDist) {
+          minDist = dist;
+          span = s;
+      }
+    }
+  }
+  if (span) {
+      return { node: span.firstChild, offset: 0 };
+  }
+  return null;
+}
 
 const getRelativeRect = (rect: DOMRect, layer: HTMLElement) => {
   const layerRect = layer.getBoundingClientRect();
@@ -492,7 +476,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
     // FORCE custom selection logic everywhere
     e.preventDefault(); 
 
-    const result = findClosestTextNode(e.clientX, e.clientY, textLayer);
+    const result = findStartClosestSpan(e.clientX, e.clientY, textLayer);
     
     if (result && result.node) {
         const selection = window.getSelection();
@@ -539,7 +523,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
              if (layer) {
                  const result = findClosestTextNode(ev.clientX, ev.clientY, layer);
                  if (result && result.node) {
-                     window.getSelection()?.extend(result.node, result.offset);
+                   window.getSelection()?.extend(result.node, result.offset);
                  }
              }
         };
