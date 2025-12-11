@@ -461,11 +461,27 @@ const PDFPage: React.FC<PDFPageProps> = ({
     
     if (result && result.node) {
         const selection = window.getSelection();
-        const range = document.createRange();
-        range.setStart(result.node, result.offset);
-        range.collapse(true);
-        selection?.removeAllRanges();
-        selection?.addRange(range);
+        
+        // SHIFT CLICK LOGIC: Extend existing selection
+        if (e.shiftKey && selection && selection.rangeCount > 0) {
+            try {
+                selection.extend(result.node, result.offset);
+            } catch (err) {
+                // Fallback to normal selection if extend fails
+                const range = document.createRange();
+                range.setStart(result.node, result.offset);
+                range.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+        } else {
+            // NORMAL CLICK LOGIC: Start new selection
+            const range = document.createRange();
+            range.setStart(result.node, result.offset);
+            range.collapse(true);
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+        }
 
         const startX = e.clientX;
         const startY = e.clientY;
