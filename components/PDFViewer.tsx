@@ -478,13 +478,12 @@ const PDFPage: React.FC<PDFPageProps> = ({
                  isDragging = true;
              }
 
+             // Dynamic Layer Detection for Cross-Page Selection
              const moveTarget = document.elementFromPoint(ev.clientX, ev.clientY);
              const pageWrapper = (moveTarget as HTMLElement)?.closest('.relative');
              
-             // Dynamic Layer Detection
-             // Only allow selecting text within this PDF Viewer
              let layer = pageWrapper?.querySelector('.textLayer') as HTMLElement;
-             if (!layer && textLayerRef.current) layer = textLayerRef.current; // Fallback to start page
+             if (!layer && textLayer) layer = textLayer; // Fallback to start page if void
 
              if (layer) {
                  const result = findClosestTextNode(ev.clientX, ev.clientY, layer);
@@ -516,7 +515,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
         className="relative bg-white shadow-md my-4 transition-all duration-200 origin-top"
         style={{ 
             width: width, 
-            height: height,
+            height: height, 
             minHeight: height
         }}
         id={`pdf-page-${pageNumber}`}
