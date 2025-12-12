@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { PDFDocumentProxy } from '../types';
+import type { PDFDocumentProxy, Boundary } from '../types';
 import { extractTextFromPage, pdfjs } from '../services/pdfService';
 import { Loader2 as Loader2Icon } from 'lucide-react';
 
@@ -31,6 +31,13 @@ const getSelectionRect = () => {
   return null;
 }
 
+const getSafeResult = (span: HTMLElement, atEnd: boolean) => {
+  return { 
+    node: span.firstChild, 
+    offset: atEnd ? (span.textContent?.length || 0) : 0 
+  };
+};
+
 /**
  * Helper: Find closest text node with Strict Row Priority.
  * Prevents selecting adjacent lines when in margins.
@@ -39,15 +46,7 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
   const spans = Array.from(layer.children) as HTMLElement[];
   if (spans.length === 0) return null;
 
-  // Helper to handle void elements (like <br>) or empty spans
-  // If firstChild (TextNode) is null, return the element itself with offset 0.
-  const getSafeResult = (span: HTMLElement, atEnd: boolean) => {
-    return { 
-      node: span.firstChild, 
-      offset: atEnd ? (span.textContent?.length || 0) : 0 
-    };
-  };
-
+  
   // 1. Identify "Visual Row"
   // Strict vertical check: Cursor MUST be between top and bottom of the span
   const rowSpans = spans.filter(s => {
@@ -128,7 +127,7 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
   return null;
 };
 
-const findStartClosestSpan = (clientX: number, clientY: number, layer: HTMLElement) => {
+const findStartClosestNode = (clientX: number, clientY: number, layer: HTMLElement) => {
   const res = findClosestTextNode(clientX, clientY, layer);
   if(res && res.node) return res;
 
@@ -140,23 +139,23 @@ const findStartClosestSpan = (clientX: number, clientY: number, layer: HTMLEleme
   for (const s of spans) {
     if(s.firstChild == null) continue;
     const r = s.getBoundingClientRect();
-    const x = r.left - clientX ;
-    const y = r.top + r.height / 2 - clientY ;
+    const dx = (r.left - clientX) * 0.2 ;
+    const dy = r.top + r.height / 2 - clientY ;
     
-    if (x >= 0 && y >= 0){
-      // x 权重小
-      const dist = x * x * 0.25 + y * y;
-      if (dist < minDist) {
-          minDist = dist;
-          span = s;
-      }
+    // x 权重小
+    const dist = dx * dx  + dy * dy;
+    if (dist < minDist) {
+        minDist = dist;
+        span = s;
     }
   }
+  
   if (span) {
-      return { node: span.firstChild, offset: 0 };
+      return getSafeResult(span, clientX >= span.getBoundingClientRect().right);
   }
   return null;
 }
+
 
 const getRelativeRect = (rect: DOMRect, layer: HTMLElement) => {
   const layerRect = layer.getBoundingClientRect();
@@ -479,8 +478,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
     // FORCE custom selection logic everywhere
     e.preventDefault(); 
 
-    const result = findStartClosestSpan(e.clientX, e.clientY, textLayer);
-    
+    const result = findStartClosestNode(e.clientX, e.clientY, textLayer);
+    console.log("MouseDown at", e.clientX, e.clientY, result);    
     if (result && result.node) {
         const selection = window.getSelection();
         
@@ -497,12 +496,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
                 selection.addRange(range);
             }
         } else {
-            // NORMAL CLICK LOGIC: Start new selection
-            const range = document.createRange();
-            range.setStart(result.node, result.offset);
-            range.collapse(true);
-            selection?.removeAllRanges();
-            selection?.addRange(range);
+          const range = document.createRange();
+          range.setStart(result.node, result.offset);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection?.addRange(range);
         }
 
         const startX = e.clientX;
@@ -510,32 +508,34 @@ const PDFPage: React.FC<PDFPageProps> = ({
         let isDragging = false;
 
         const handleMouseMove = (ev: MouseEvent) => {
-             if (!isDragging) {
-                 const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
-                 if (dist < 5) return;
-                 isDragging = true;
-             }
+          if (!isDragging) {
+              const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
+              if (dist < 5) return;
+              isDragging = true;
+          }
 
-             // Dynamic Layer Detection for Cross-Page Selection
-             const moveTarget = document.elementFromPoint(ev.clientX, ev.clientY);
-             const pageWrapper = (moveTarget as HTMLElement)?.closest('.relative');
-             
-             let layer = pageWrapper?.querySelector('.textLayer') as HTMLElement;
-             if (!layer && textLayer) layer = textLayer; // Fallback to start page if void
+          // Dynamic Layer Detection for Cross-Page Selection
+          const moveTarget = document.elementFromPoint(ev.clientX, ev.clientY);
+          const pageWrapper = (moveTarget as HTMLElement)?.closest('.relative');
+          
+          let layer = pageWrapper?.querySelector('.textLayer') as HTMLElement;
+          if (!layer && textLayer) layer = textLayer; // Fallback to start page if void
 
-             if (layer) {
-                 const result = findClosestTextNode(ev.clientX, ev.clientY, layer);
-                 if (result && result.node) {
-                   window.getSelection()?.extend(result.node, result.offset);
-                 }
-             }
+          if (layer) {
+              const result = findClosestTextNode(ev.clientX, ev.clientY, layer);
+              if (result && result.node) {
+                window.getSelection()?.extend(result.node, result.offset);
+              }
+          }
         };
 
         const handleMouseUp = () => {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
             if (!isDragging) {
-                // Keep cursor at clicked position (caret), don't remove range
+                // If it was just a click without significant drag, clear the selection
+                window.getSelection()?.removeAllRanges();
+                console.log("Cleared selection on click");
             }
         };
 

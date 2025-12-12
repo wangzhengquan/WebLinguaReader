@@ -41,3 +41,10 @@ export enum ChatState {
   LOADING = 'LOADING',
   ERROR = 'ERROR'
 }
+
+
+export enum Boundary {
+  START = 'START',
+  BETWEEN = 'BETWEEN',
+  END = 'END'
+}
