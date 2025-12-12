@@ -470,6 +470,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
    * Replaced Native Selection with fully custom calculations.
    */
   const handleMouseDown = (e: React.MouseEvent) => {
+    // Ignore non-left clicks (e.g. Right Click for Context Menu) to preserve selection
+    if (e.button !== 0) return;
+
     const textLayer = textLayerRef.current;
     if (!textLayer) return;
 
