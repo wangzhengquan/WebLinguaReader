@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import type { PDFDocumentProxy, Boundary } from '../types';
+import { PDFDocumentProxy } from '../types';
 import { extractTextFromPage, pdfjs } from '../services/pdfService';
 import { Loader2 as Loader2Icon } from 'lucide-react';
 
@@ -23,6 +23,8 @@ interface PDFPageProps {
   forcePreload: boolean;
 }
 
+const UP = 1, DOWN = 1 << 1, LEFT = 1 << 2, RIGHT = 1 << 3;
+
 const getSelectionRect = () => {
   const selection = window.getSelection();
   if( selection && selection.rangeCount > 0) {
@@ -31,18 +33,25 @@ const getSelectionRect = () => {
   return null;
 }
 
-const getSafeResult = (span: HTMLElement, atEnd: boolean) => {
+
+const getResult = (span: HTMLElement, atEnd: boolean) => {
   return { 
     node: span.firstChild, 
     offset: atEnd ? (span.textContent?.length || 0) : 0 
   };
 };
 
+const getSafeResult = (span: HTMLElement, atEnd: boolean) => {
+  if(!span.firstChild) 
+    return { node: span, offset: 0 }
+  else return getResult(span, atEnd);
+};
+
 /**
  * Helper: Find closest text node with Strict Row Priority.
  * Prevents selecting adjacent lines when in margins.
  */
-const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElement) => {
+const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElement) => (start: boolean = false, direction: number) => {
   const spans = Array.from(layer.children) as HTMLElement[];
   if (spans.length === 0) return null;
 
@@ -51,9 +60,13 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
   // Strict vertical check: Cursor MUST be between top and bottom of the span
   const rowSpans = spans.filter(s => {
       const r = s.getBoundingClientRect();
-      return clientY >= r.top && clientY <= r.bottom;
+      // s.tagName==='SPAN' &&
+      if (start){
+        return s.tagName==='SPAN' && clientY >= r.top && clientY <= r.bottom;
+      }
+      return  clientY >= r.top && clientY <= r.bottom;
   });
-
+// debugger;
   // If on a row (or horizontal margin of a row)
   if (rowSpans.length > 0) {
       // Sort by X position
@@ -66,16 +79,27 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
 
       // Left Margin -> Start of First Span
       if (clientX < firstRect.left) {
-          return getSafeResult(firstSpan, false);
+        if (start){
+          console.log('=====left margin, return null')
+          return null;
+        }
+        return getResult(firstSpan, false);
       }
       
       // Right Margin -> End of Last Span
       if (clientX > lastRect.right) {
+        
         const r = getSelectionRect();
         if (r && r.left > lastRect.right) {
           return null;
+        } 
+        
+        if (direction & RIGHT) {
+          console.log('=====right margin ')
+          return null;
         }
-        return getSafeResult(lastSpan, true);
+        
+        return getResult(lastSpan, true);
       }
 
       // Inside the row (between words or columns)
@@ -101,54 +125,111 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
             
             // Fallback to simpler midpoint check
             const isAtEnd = clientX > (r.left + r.width/2);
-            return getSafeResult(span, isAtEnd);
+            return getResult(span, isAtEnd);
         }
 
         // Gutter between this and next
         if (i < rowSpans.length - 1) {
-          const r = getSelectionRect();
-          if(r) {
-            const nextSpan = rowSpans[i+1];
-            const nextR = nextSpan.getBoundingClientRect();
-            
+          const nextSpan = rowSpans[i+1];
+          const nextR = nextSpan.getBoundingClientRect();
+          const selRect = getSelectionRect();
+          if(start) {
             if (clientX > r.right && clientX < nextR.left) {
-              const distLeft = clientX - r.right;
-              const distRight = nextR.left - clientX;
-              if (distLeft <= distRight) {
-                  return getSafeResult(span, true);
-              } else {
-                  return getSafeResult(nextSpan, false);
+              if (direction & RIGHT) {
+                console.log("=====gutter right", nextSpan);
+                return getSafeResult(nextSpan, false);
+              } else if (direction & LEFT) {
+                console.log("=====gutter left", span);
+                return getSafeResult(span, true);
               }
             }
-          }
+          } 
+          // else if (clientX > r.right && clientX < nextR.left) {
+          //     const distLeft = clientX - r.right;
+          //     const distRight = nextR.left - clientX;
+          //     if (distLeft <= distRight) {
+          //       console.log("=====gutter left", span);
+          //       return getSafeResult(span, true);
+          //     } else {
+          //       console.log("=====gutter right", nextSpan);
+          //       return getSafeResult(nextSpan, false);
+          //     }
+          // }
+          else if(selRect) {
+            if (clientX > selRect.right && clientX < nextR.left) {
+              const distLeft = clientX - selRect.right;
+              const distRight = nextR.left - clientX;
+              if (distLeft <= distRight) {
+                console.log("=====gutter selRect left", span);
+                return getResult(span, true);
+              } else {
+                console.log("=====gutter selRect right", nextSpan);
+                return getResult(nextSpan, false);
+              }
+            }
+          } 
+           
         }
       }
   } 
   return null;
 };
+  
 
-const findStartClosestNode = (clientX: number, clientY: number, layer: HTMLElement) => {
-  const res = findClosestTextNode(clientX, clientY, layer);
+const epsilon = 0.1;
+
+const findStartClosestNode =  (clientX: number, clientY: number, layer: HTMLElement) => (direction: number) => {
+  const res = findClosestTextNode(clientX, clientY, layer)(true, direction);
   if(res && res.node) return res;
 
   const spans = Array.from(layer.children) as HTMLElement[];
   if (spans.length === 0) return null;
-
+console.log("findStartClosestNode fallback")
   let span;
-  let minDist = Infinity;
+  let minDy = Infinity, minDx = Infinity, minDist = Infinity;
   for (const s of spans) {
     if(s.firstChild == null) continue;
     const r = s.getBoundingClientRect();
-    const dx = (r.left - clientX) * 0.2 ;
+     // x 权重小
+    const dx = (r.left - clientX) * .2;
     const dy = r.top + r.height / 2 - clientY ;
-    
-    // x 权重小
     const dist = dx * dx  + dy * dy;
-    if (dist < minDist) {
-        minDist = dist;
-        span = s;
+    const e = Math.abs(dy - minDy);
+    // if(dy < minDy){
+    //   console.log("=====1");
+    //   span = s;
+    //   minDx = dx;
+    //   minDy = dy;
+    //   minDist = dist;
+      
+    // } else if(dy == minDy){
+    //   if(span.getBoundingClientRect().left > r.right){
+    //     console.log("=====2");
+    //     span = s;
+    //     minDx = dx;
+    //     minDy = dy;
+    //     minDist = dist;
+    //   }
+    // } 
+    if (dist <= minDist){
+      if(r.left > clientX && (direction & LEFT)){
+        continue;
+      }
+      span = s;
+      minDx = dx;
+      minDy = dy;
+      minDist = dist;
+      // if (!span || r.left < span.getBoundingClientRect().right ){
+      //   // console.log("=====1", s);
+      //   span = s;
+      //   minDx = dx;
+      //   minDy = dy;
+      //   minDist = dist;
+      // }
     }
+     
   }
+  
   
   if (span) {
       return getSafeResult(span, clientX >= span.getBoundingClientRect().right);
@@ -478,42 +559,49 @@ const PDFPage: React.FC<PDFPageProps> = ({
     // FORCE custom selection logic everywhere
     e.preventDefault(); 
 
-    const result = findStartClosestNode(e.clientX, e.clientY, textLayer);
-    console.log("MouseDown at", e.clientX, e.clientY, result);    
-    if (result && result.node) {
-        const selection = window.getSelection();
+    let superpositionState_findStartClosestNode = findStartClosestNode(e.clientX, e.clientY, textLayer);
+    // console.log("MouseDown at", e.clientX, e.clientY, result); 
+    // const selection = window.getSelection();
         
-        // SHIFT CLICK LOGIC: Extend existing selection
-        if (e.shiftKey && selection && selection.rangeCount > 0) {
-            try {
-                selection.extend(result.node, result.offset);
-            } catch (err) {
-                // Fallback to normal selection if extend fails
-                const range = document.createRange();
-                range.setStart(result.node, result.offset);
-                range.collapse(true);
-                selection.removeAllRanges();
-                selection.addRange(range);
-            }
-        } else {
-          const range = document.createRange();
-          range.setStart(result.node, result.offset);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection?.addRange(range);
-        }
-
-        const startX = e.clientX;
-        const startY = e.clientY;
+    // SHIFT CLICK LOGIC: Extend existing selection
+    if (e.shiftKey && window.getSelection() && window.getSelection().rangeCount > 0) {
+      const result = superpositionState_findStartClosestNode(0);
+      try {
+          window.getSelection().extend(result.node, result.offset);
+      } catch (err) {
+        // Fallback to normal window.getSelection() if extend fails
+        const range = document.createRange();
+        range.setStart(result.node, result.offset);
+        range.collapse(true);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+      }
+    } else {
+        let startX = e.clientX, startY = e.clientY;
         let isDragging = false;
-
+        window.getSelection().removeAllRanges();
         const handleMouseMove = (ev: MouseEvent) => {
           if (!isDragging) {
               const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
               if (dist < 5) return;
               isDragging = true;
           }
-
+          if(window.getSelection().rangeCount === 0) {
+            const direction = (ev.clientX >= startX ? RIGHT : LEFT) | (ev.clientY - startY >= 0 ? DOWN : UP);
+            let result = superpositionState_findStartClosestNode(direction);
+            if(result && result.node){
+              console.log("=====set start", result.node)
+              const range = document.createRange();
+              range.setStart(result.node, result.offset);
+              range.collapse(true);
+              // selection.removeAllRanges();
+              window.getSelection().addRange(range);
+            } else {
+              superpositionState_findStartClosestNode = findStartClosestNode(ev.clientX, ev.clientY, textLayer);
+            }
+            
+          }
+          
           // Dynamic Layer Detection for Cross-Page Selection
           const moveTarget = document.elementFromPoint(ev.clientX, ev.clientY);
           const pageWrapper = (moveTarget as HTMLElement)?.closest('.relative');
@@ -522,9 +610,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
           if (!layer && textLayer) layer = textLayer; // Fallback to start page if void
 
           if (layer) {
-              const result = findClosestTextNode(ev.clientX, ev.clientY, layer);
+              const result = findClosestTextNode(ev.clientX, ev.clientY, layer)(false, 0);
               if (result && result.node) {
-                window.getSelection()?.extend(result.node, result.offset);
+                if (window.getSelection().rangeCount > 0) window.getSelection().extend(result.node, result.offset);
               }
           }
         };
@@ -534,8 +622,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
             window.removeEventListener('mouseup', handleMouseUp);
             if (!isDragging) {
                 // If it was just a click without significant drag, clear the selection
-                window.getSelection()?.removeAllRanges();
-                console.log("Cleared selection on click");
+                // window.getSelection()?.removeAllRanges();
+                // console.log("Cleared selection on click");
             }
         };
 

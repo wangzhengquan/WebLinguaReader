@@ -42,9 +42,4 @@ export enum ChatState {
   ERROR = 'ERROR'
 }
 
-
-export enum Boundary {
-  START = 'START',
-  BETWEEN = 'BETWEEN',
-  END = 'END'
-}
+ 
