@@ -249,6 +249,67 @@ const getRelativeRect = (rect: DOMRect, layer: HTMLElement) => {
   };
 };
 
+
+/**
+ * Expands selection to the word boundaries at the given node/offset.
+ */
+const selectWordAtNode = (node: Node, offset: number) => {
+  let targetNode = node;
+  let targetOffset = offset;
+
+  // Normalize to Text Node if Element provided
+  if (targetNode.nodeType === Node.ELEMENT_NODE) {
+      if (targetOffset < targetNode.childNodes.length) {
+          targetNode = targetNode.childNodes[targetOffset];
+          targetOffset = 0;
+      } else if (targetNode.childNodes.length > 0) {
+          // End of element
+          targetNode = targetNode.lastChild!;
+          targetOffset = targetNode.textContent?.length || 0;
+      }
+  }
+
+  if (targetNode.nodeType !== Node.TEXT_NODE) return;
+
+  const text = targetNode.textContent || "";
+  if (!text) return;
+
+  const isWordChar = (char: string) => /[\p{L}\p{N}_]/u.test(char);
+  const len = text.length;
+  
+  // Anchor determines the "type" of character we are selecting (word vs non-word)
+  // If clicking at the end of a word, we want that word.
+  let anchor = targetOffset;
+  if (anchor >= len && anchor > 0) anchor = len - 1; // Clamp to last char if at end
+  if (anchor < 0) anchor = 0;
+
+  const type = isWordChar(text[anchor]);
+  
+  let start = anchor;
+  let end = anchor + 1; // End is exclusive for Range, but we scan inclusively with char index
+
+  // Scan backwards
+  while (start > 0 && isWordChar(text[start - 1]) === type) {
+    start--;
+  }
+  
+  // Scan forwards
+  while (end < len && isWordChar(text[end]) === type) {
+    end++;
+  }
+  
+  const range = document.createRange();
+  try {
+      range.setStart(targetNode, start);
+      range.setEnd(targetNode, end);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+  } catch(e) {
+      console.warn("Selection range error", e);
+  }
+};
+
 // Sub-component for individual pages
 const PDFPage: React.FC<PDFPageProps> = ({ 
   pageNumber, 
@@ -545,7 +606,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
     };
   }, [shouldRender, pdfDocument, pageNumber, scale, dimensions]);
 
-// TODO: 双击一个单词，选中该单词
+  
+
   /**
    * 智能文本选择 (Smart Text Selection)
    * Replaced Native Selection with fully custom calculations.
@@ -561,8 +623,74 @@ console.log("=====", e.target)
     e.preventDefault(); 
 
     let superpositionState_findStartClosestNode = findStartClosestNode(e.clientX, e.clientY, textLayer);
-    // console.log("MouseDown at", e.clientX, e.clientY, result); 
-    // const selection = window.getSelection();
+    
+    const handleDragSelection = (startX: number, startY: number) => {
+      // let startX = e.clientX, startY = e.clientY;
+      // const textLayer = textLayerRef.current;
+      // let superpositionState_findStartClosestNode = findStartClosestNode(startX, startY, textLayer);
+      let isDragging = false;
+      window.getSelection().removeAllRanges();
+      const handleMouseMove = (ev: MouseEvent) => {
+        if (!isDragging) {
+            const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
+            if (dist < 5) return;
+            isDragging = true;
+        }
+        if(window.getSelection().rangeCount === 0) {
+          const direction = (ev.clientX >= startX ? RIGHT : LEFT) | (ev.clientY - startY >= 0 ? DOWN : UP);
+          let result = superpositionState_findStartClosestNode(direction);
+          if(result && result.node){
+            console.log("=====set start", result.node)
+            const range = document.createRange();
+            range.setStart(result.node, result.offset);
+            range.collapse(true);
+            // selection.removeAllRanges();
+            window.getSelection().addRange(range);
+          } else {
+            superpositionState_findStartClosestNode = findStartClosestNode(ev.clientX, ev.clientY, textLayer);
+          }
+          
+        }
+        
+        // Dynamic Layer Detection for Cross-Page Selection
+        const moveTarget = document.elementFromPoint(ev.clientX, ev.clientY);
+        const pageWrapper = (moveTarget as HTMLElement)?.closest('.relative');
+        
+        let layer = pageWrapper?.querySelector('.textLayer') as HTMLElement;
+        if (!layer && textLayer) layer = textLayer; // Fallback to start page if void
+  
+        if (layer) {
+            const result = findClosestTextNode(ev.clientX, ev.clientY, layer)(false, 0);
+            if (result && result.node) {
+              if (window.getSelection().rangeCount > 0) window.getSelection().extend(result.node, result.offset);
+            }
+        }
+      };
+  
+      const handleMouseUp = () => {
+          window.removeEventListener('mousemove', handleMouseMove);
+          window.removeEventListener('mouseup', handleMouseUp);
+          if (!isDragging) {
+              // If it was just a click without significant drag, clear the selection
+              // window.getSelection()?.removeAllRanges();
+              // console.log("Cleared selection on click");
+          }
+      };
+  
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    if (e.detail === 2) {
+      const result = superpositionState_findStartClosestNode(0);
+      debugger
+      if (result && result.node) {
+        selectWordAtNode(result.node, result.offset);
+        // Attach drag listener to allow extending from the word selection
+        handleDragSelection(e.clientX, e.clientY);
+        return;
+      }
+    }
         
     // SHIFT CLICK LOGIC: Extend existing selection
     if (e.shiftKey && window.getSelection() && window.getSelection().rangeCount > 0) {
@@ -578,58 +706,7 @@ console.log("=====", e.target)
         window.getSelection().addRange(range);
       }
     } else {
-        let startX = e.clientX, startY = e.clientY;
-        let isDragging = false;
-        window.getSelection().removeAllRanges();
-        const handleMouseMove = (ev: MouseEvent) => {
-          if (!isDragging) {
-              const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
-              if (dist < 5) return;
-              isDragging = true;
-          }
-          if(window.getSelection().rangeCount === 0) {
-            const direction = (ev.clientX >= startX ? RIGHT : LEFT) | (ev.clientY - startY >= 0 ? DOWN : UP);
-            let result = superpositionState_findStartClosestNode(direction);
-            if(result && result.node){
-              console.log("=====set start", result.node)
-              const range = document.createRange();
-              range.setStart(result.node, result.offset);
-              range.collapse(true);
-              // selection.removeAllRanges();
-              window.getSelection().addRange(range);
-            } else {
-              superpositionState_findStartClosestNode = findStartClosestNode(ev.clientX, ev.clientY, textLayer);
-            }
-            
-          }
-          
-          // Dynamic Layer Detection for Cross-Page Selection
-          const moveTarget = document.elementFromPoint(ev.clientX, ev.clientY);
-          const pageWrapper = (moveTarget as HTMLElement)?.closest('.relative');
-          
-          let layer = pageWrapper?.querySelector('.textLayer') as HTMLElement;
-          if (!layer && textLayer) layer = textLayer; // Fallback to start page if void
-
-          if (layer) {
-              const result = findClosestTextNode(ev.clientX, ev.clientY, layer)(false, 0);
-              if (result && result.node) {
-                if (window.getSelection().rangeCount > 0) window.getSelection().extend(result.node, result.offset);
-              }
-          }
-        };
-
-        const handleMouseUp = () => {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
-            if (!isDragging) {
-                // If it was just a click without significant drag, clear the selection
-                // window.getSelection()?.removeAllRanges();
-                // console.log("Cleared selection on click");
-            }
-        };
-
-        window.addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('mouseup', handleMouseUp);
+      handleDragSelection(e.clientX, e.clientY);
     }
   };
 
