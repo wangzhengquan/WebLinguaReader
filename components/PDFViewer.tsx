@@ -89,8 +89,9 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
       // Right Margin -> End of Last Span
       if (clientX > lastRect.right) {
         
-        const r = getSelectionRect();
-        if (r && r.left > lastRect.right) {
+        const selRect = getSelectionRect();
+        // Todo 单栏的时候这个逻辑不对
+        if (selRect && selRect.left > lastRect.right) {
           return null;
         } 
         
@@ -544,7 +545,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
     };
   }, [shouldRender, pdfDocument, pageNumber, scale, dimensions]);
 
-
+// TODO: 双击一个单词，选中该单词
   /**
    * 智能文本选择 (Smart Text Selection)
    * Replaced Native Selection with fully custom calculations.
@@ -552,7 +553,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
   const handleMouseDown = (e: React.MouseEvent) => {
     // Ignore non-left clicks (e.g. Right Click for Context Menu) to preserve selection
     if (e.button !== 0) return;
-
+console.log("=====", e.target)
     const textLayer = textLayerRef.current;
     if (!textLayer) return;
 
