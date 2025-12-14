@@ -66,7 +66,6 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
       }
       return  clientY >= r.top && clientY <= r.bottom;
   });
-// debugger;
   // If on a row (or horizontal margin of a row)
   if (rowSpans.length > 0) {
       // Sort by X position
@@ -268,7 +267,6 @@ const selectWordAtNode = (node: Node, offset: number) => {
           targetOffset = targetNode.textContent?.length || 0;
       }
   }
-
   if (targetNode.nodeType !== Node.TEXT_NODE) return;
 
   const text = targetNode.textContent || "";
@@ -629,7 +627,6 @@ console.log("=====", e.target)
       // const textLayer = textLayerRef.current;
       // let superpositionState_findStartClosestNode = findStartClosestNode(startX, startY, textLayer);
       let isDragging = false;
-      window.getSelection().removeAllRanges();
       const handleMouseMove = (ev: MouseEvent) => {
         if (!isDragging) {
             const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
@@ -681,9 +678,11 @@ console.log("=====", e.target)
       window.addEventListener('mouseup', handleMouseUp);
     }
 
+    window.getSelection().removeAllRanges();
+
     if (e.detail === 2) {
       const result = superpositionState_findStartClosestNode(0);
-      debugger
+      
       if (result && result.node) {
         selectWordAtNode(result.node, result.offset);
         // Attach drag listener to allow extending from the word selection
