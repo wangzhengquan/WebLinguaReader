@@ -67,4 +67,24 @@ describe('DOMRectUtils', () => {
     const inner = new DOMRect(25, 25, 50, 50);
     expect(DOMRectUtils.isIntersect(outer, inner)).toBe(true);
   });
+
+  it('should correctly identify if one rectangle contains another', () => {
+    const outer = new DOMRect(0, 0, 100, 100);
+    const inner = new DOMRect(25, 25, 50, 50);
+    expect(DOMRectUtils.contains(outer, inner)).toBe(true);
+  });
+
+  it('should correctly identify if one rectangle does not contain another', () => {
+    const rect1 = new DOMRect(0, 0, 100, 100);
+    const rect2 = new DOMRect(50, 50, 100, 100); // Overlapping but not contained
+    expect(DOMRectUtils.contains(rect1, rect2)).toBe(false);
+
+    const rect3 = new DOMRect(200, 200, 50, 50); // Completely outside
+    expect(DOMRectUtils.contains(rect1, rect3)).toBe(false);
+  });
+
+  it('should consider a rectangle to contain itself', () => {
+    const rect = new DOMRect(0, 0, 100, 100);
+    expect(DOMRectUtils.contains(rect, rect)).toBe(true);
+  });
 });

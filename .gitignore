@@ -9,6 +9,8 @@ lerna-debug.log*
 
 node_modules
 node_modules_linux
+node_modules_mac
+node_modules_win
 dist
 dist-ssr
 *.local
@@ -24,3 +26,4 @@ dist-ssr
 *.sln
 *.sw?
 pnpm-lock.yaml
+

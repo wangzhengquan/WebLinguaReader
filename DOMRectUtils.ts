@@ -23,4 +23,16 @@ export class DOMRectUtils {
       rect1.bottom > rect2.top
     );
   }
+
+  /**
+   * Checks if the first DOMRect completely contains the second DOMRect.
+   */
+  static contains(outer: DOMRect, inner: DOMRect): boolean {
+    return (
+      outer.left <= inner.left &&
+      outer.right >= inner.right &&
+      outer.top <= inner.top &&
+      outer.bottom >= inner.bottom
+    );
+  }
 }

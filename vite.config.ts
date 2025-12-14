@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       test: {
         environment: 'jsdom',
-        globals: true,
+        globals: true
       },
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
