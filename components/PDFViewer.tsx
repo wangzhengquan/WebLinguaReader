@@ -123,6 +123,16 @@ function layoutBlockOf(rect: DOMRect, blocks: DOMRect[] ): DOMRect {
   return null;
 }
 
+function intersectLayoutBlockOf(rect: DOMRect, blocks: DOMRect[] ): DOMRect {
+  for (const block of blocks) {
+    if (DOMRectUtils.isIntersect(block, rect)) {
+      return block;
+    }
+  }
+  
+  return null;
+}
+
 function layoutBlockOfCoord(clientX: number, clientY: number, blocks: DOMRect[] ): DOMRect {
   for (const block of blocks) {
     if (DOMRectUtils.isContainsCoord(block, clientX, clientY)) {
@@ -141,7 +151,10 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
   const spans = Array.from(layer.children) as HTMLElement[];
   if (spans.length === 0) return null;
 
-  
+  const mouseBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks)
+  const selRect = getSelectionRect();
+  let selBlock = selRect ? intersectLayoutBlockOf(selRect, layoutBlocks) : null;
+  selBlock = DOMRectUtils.union(selBlock, selRect);
   // 1. Identify "Visual Row"
   // Strict vertical check: Cursor MUST be between top and bottom of the span
   const rowSpans = spans.filter(s => {
@@ -176,8 +189,8 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
         // 沿着最左边选择，且firstSpan 不在第二栏
         return getResult(firstSpan, false);
       }
-      const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
-      if (layoutBlock && DOMRectUtils.isContains(layoutBlock, firstRect) ){
+      // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
+      if (DOMRectUtils.isContains(mouseBlock, firstRect) ){
         console.log('=====left margin 2', firstSpan)
         return getResult(firstSpan, false);
       }
@@ -195,8 +208,8 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
         // 沿着右边选择，且firstSpan 不在第一栏
         return getResult(lastSpan, true);
       }
-      const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
-      if (layoutBlock && DOMRectUtils.isContains(layoutBlock, lastRect) ){
+      // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
+      if ( DOMRectUtils.isContains(mouseBlock, lastRect) ){
         return getResult(lastSpan, true);
       }
       // if (direction & RIGHT) {
@@ -237,12 +250,12 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
           const nextR = nextSpan.getBoundingClientRect();
           
           if (clientX > r.right && clientX < nextR.left) {
-            const selRect = getSelectionRect();
+            
             if(selRect) {
               if (clientX > selRect.right && clientX < nextR.left) {
                 // 如果已经有选区了，那么除非鼠标明显进入选区外的block，优先选择选区所在的block的文字
-                const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
-                if (DOMRectUtils.isContains(layoutBlock, nextR)){
+                // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
+                if (DOMRectUtils.isContains(mouseBlock, nextR)){
                   console.log("=====gutter selRect right 1", nextSpan);
                   return getResult(nextSpan, false);
                 } else{
@@ -251,8 +264,8 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
                 }
               } else if (clientX > r.right && clientX < selRect.left) {
                 // 如果已经有选区了，那么除非鼠标明显进入选区外的block，优先选择选区所在的block的文字
-                const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
-                if (DOMRectUtils.isContains(layoutBlock, r)){
+                // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
+                if (DOMRectUtils.isContains(mouseBlock, r)){
                   console.log("=====gutter selRect left 2", nextSpan);
                   return getResult(span, true);
                 } else{
@@ -298,11 +311,13 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
   let span;
   // let minDy = Infinity, minDx = Infinity;
   let minDist = Infinity;
-  const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
+  // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
   for (const s of spans) {
     if(s.tagName !=="SPAN") continue;
     const r = s.getBoundingClientRect();
-    if(layoutBlock && !DOMRectUtils.isContains(layoutBlock, r)) continue;
+    if(mouseBlock && !DOMRectUtils.isContains(mouseBlock, r)) continue;
+    // 如果已经有选区了，那么除非鼠标明显进入选区外的block，优先选择选区所在的block的文字
+    if(selBlock && !DOMRectUtils.isContains(selBlock, span) && !DOMRectUtils.isContains(mouseBlock, r) ) continue;
      // x 权重小
     const dx = Math.min(Math.abs(r.left - clientX), Math.abs(r.right - clientX)) * .2;
     // const dy = r.top + r.height / 2 - clientY ;

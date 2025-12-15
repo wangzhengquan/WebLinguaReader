@@ -4,6 +4,8 @@ export default class DOMRectUtils {
    * The resulting DOMRect encompasses both input rectangles.
    */
   static union(rect1: DOMRect, rect2: DOMRect): DOMRect {
+    if(rect1 === null) return rect2;
+    if(rect2 === null) return rect1;
     const x = Math.min(rect1.x, rect2.x);
     const y = Math.min(rect1.y, rect2.y);
     const right = Math.max(rect1.right, rect2.right);
