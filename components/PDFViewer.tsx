@@ -153,60 +153,58 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
   // const layoutBlocks = computeLayoutBlocks(layer)
   // If on a row (or horizontal margin of a row)
   if (rowSpans.length > 0) {
-      // Sort by X position
-      rowSpans.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-      
-      const firstSpan = rowSpans[0];
-      const lastSpan = rowSpans[rowSpans.length - 1];
-      const firstRect = firstSpan.getBoundingClientRect();
-      const lastRect = lastSpan.getBoundingClientRect();
+    // Sort by X position
+    rowSpans.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+    
+    const firstSpan = rowSpans[0];
+    const lastSpan = rowSpans[rowSpans.length - 1];
+    const firstRect = firstSpan.getBoundingClientRect();
+    const lastRect = lastSpan.getBoundingClientRect();
 
-      // Left Margin -> Start of First Span
-      if (clientX < firstRect.left) {
-        // if (start){
-        //   console.log('=====left margin, return null')
-        //   return null;
-        // }
-        // const selRect = getSelectionRect();
-        // if(selRect) {
-        // }
-       
-        if(layoutBlocks.length> 0 && clientX < layoutBlocks[0].left && firstRect.left < layoutBlocks[0].right) {
-          console.log('=====left margin 1', firstSpan)
-          // 沿着最左边选择，且firstSpan 不在第二栏
-          return getResult(firstSpan, false);
-        }
-        const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
-        if (layoutBlock && DOMRectUtils.isContains(layoutBlock, firstRect) ){
-          console.log('=====left margin 2', firstSpan)
-          return getResult(firstSpan, false);
-        }
-        return null;
-      }
+    // Left Margin -> Start of First Span
+    if (clientX < firstRect.left) {
+      // if (start){
+      //   console.log('=====left margin, return null')
+      //   return null;
+      // }
+      // const selRect = getSelectionRect();
+      // if(selRect) {
+      // }
       
-      // Right Margin -> End of Last Span
-      if (clientX > lastRect.right) {
-        
-        // const selRect = getSelectionRect();
-        // if (selRect && !DOMRectUtils.isIntersect(layoutBlockOf(lastRect, layoutBlocks), selRect) ) {
-        //   return null;
-        // } 
-        if(layoutBlocks.length> 0 && clientX > layoutBlocks[layoutBlocks.length-1].right && lastRect.right > layoutBlocks[layoutBlocks.length-1].left) {
-          console.log('=====left margin 1', firstSpan)
-          // 沿着最左边选择，且firstSpan 不在第一栏
-          return getResult(lastSpan, true);
-        }
-        const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
-        if (layoutBlock && DOMRectUtils.isContains(layoutBlock, lastRect) ){
-          return getResult(lastSpan, true);
-        }
-        return null;
-        // if (direction & RIGHT) {
-        //   console.log('=====right margin ')
-        //   return null;
-        // }
+      if(layoutBlocks.length> 0 && clientX < layoutBlocks[0].left && firstRect.left < layoutBlocks[0].right) {
+        console.log('=====left margin 1', firstSpan)
+        // 沿着最左边选择，且firstSpan 不在第二栏
+        return getResult(firstSpan, false);
       }
-
+      const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
+      if (layoutBlock && DOMRectUtils.isContains(layoutBlock, firstRect) ){
+        console.log('=====left margin 2', firstSpan)
+        return getResult(firstSpan, false);
+      }
+    }
+    
+    // Right Margin -> End of Last Span
+    else if (clientX > lastRect.right) {
+      
+      // const selRect = getSelectionRect();
+      // if (selRect && !DOMRectUtils.isIntersect(layoutBlockOf(lastRect, layoutBlocks), selRect) ) {
+      //   return null;
+      // } 
+      if(layoutBlocks.length > 0 && clientX > layoutBlocks[layoutBlocks.length-1].right && lastRect.right > layoutBlocks[layoutBlocks.length-1].left) {
+        console.log('=====left margin 1', firstSpan)
+        // 沿着右边选择，且firstSpan 不在第一栏
+        return getResult(lastSpan, true);
+      }
+      const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
+      if (layoutBlock && DOMRectUtils.isContains(layoutBlock, lastRect) ){
+        return getResult(lastSpan, true);
+      }
+      // if (direction & RIGHT) {
+      //   console.log('=====right margin ')
+      //   return null;
+      // }
+    }
+    else {
       // Inside the row (between words or columns)
       for (let i = 0; i < rowSpans.length; i++) {
         const span = rowSpans[i];
@@ -239,22 +237,8 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
           const nextR = nextSpan.getBoundingClientRect();
           
           if (clientX > r.right && clientX < nextR.left) {
-            // if(start) {
-            //   if (direction & RIGHT) {
-            //     console.log("=====gutter direction right", nextSpan);
-            //     return getSafeResult(nextSpan, false);
-            //   } else if (direction & LEFT) {
-            //     console.log("=====gutter direction left", span);
-            //     return getSafeResult(span, true);
-            //   }
-            // } 
-            
             const selRect = getSelectionRect();
             if(selRect) {
-              // if (clientX <= selRect.left) {
-              //   console.log("=====gutter selRect left", span);
-              //   return getResult(span, true);
-              // } 
               if (clientX > selRect.right && clientX < nextR.left) {
                 // 如果已经有选区了，那么除非鼠标明显进入选区外的block，优先选择选区所在的block的文字
                 const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
@@ -308,25 +292,13 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
           }
         }
       }
+    }
   } 
-  return null;
-};
   
-
-// const epsilon = 0.1;
-
-const findStartClosestNode =  (clientX: number, clientY: number, layer: HTMLElement) => (direction: number, layoutBlocks: DOMRect[]) => {
-  const res = findClosestTextNode(clientX, clientY, layer)(true, direction, layoutBlocks);
-  if(res && res.node) return res;
-
-  const spans = Array.from(layer.children) as HTMLElement[];
-  if (spans.length === 0) return null;
-  const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
-  
-
   let span;
   // let minDy = Infinity, minDx = Infinity;
   let minDist = Infinity;
+  const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
   for (const s of spans) {
     if(s.tagName !=="SPAN") continue;
     const r = s.getBoundingClientRect();
@@ -334,7 +306,7 @@ const findStartClosestNode =  (clientX: number, clientY: number, layer: HTMLElem
      // x 权重小
     const dx = Math.min(Math.abs(r.left - clientX), Math.abs(r.right - clientX)) * .2;
     // const dy = r.top + r.height / 2 - clientY ;
-    const dy = Math.min(Math.abs(r.top - clientY), Math.abs(r.bottom - clientY))
+    const dy = Math.min(Math.abs(r.top + r.height / 2 - clientY), Math.abs(r.bottom - r.height / 2 - clientY))
     const dist = dx * dx  + dy * dy;
     
     if (dist <= minDist){
@@ -347,13 +319,17 @@ const findStartClosestNode =  (clientX: number, clientY: number, layer: HTMLElem
     }
   }
   
-  console.log("findStartClosestNode fallback", span)
   if (span) {
-      return getSafeResult(span, clientX >= span.getBoundingClientRect().right);
+    const r = span.getBoundingClientRect();
+    console.log("findStartClosestNode fallback, span=", span ,clientX >= r.right || clientY >= r.bottom, clientX , r.right , clientY , r.bottom)
+    return getResult(span, clientX >= r.right || clientY >= r.bottom);
+  } else {
+    console.log("findStartClosestNode fallback, span=null")
+    return null;
   }
-  return null;
-}
-
+};
+  
+ 
 
 const getRelativeRect = (rect: DOMRect, layer: HTMLElement) => {
   const layerRect = layer.getBoundingClientRect();
@@ -738,8 +714,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
     
     // FORCE custom selection logic everywhere
     e.preventDefault(); 
-    
-    let superpositionState_findStartClosestNode = findStartClosestNode(e.clientX, e.clientY, textLayer);
+    const MIND = 2;
+    console.log("handleMouseDown==", e.clientX, e.clientY)
+    let superpositionState_findStartClosestNode = findClosestTextNode(e.clientX, e.clientY, textLayer);
     
     const handleDragSelection = (startX: number, startY: number) => {
       // let startX = e.clientX, startY = e.clientY;
@@ -749,7 +726,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
       const handleMouseMove = (ev: MouseEvent) => {
         if (!isDragging) {
             const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
-            if (dist < 5) return;
+            if (dist < MIND) return;
             isDragging = true;
         }
         const layoutBlocks = computeLayoutBlocks(textLayer);
@@ -757,11 +734,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
         if(window.getSelection().rangeCount === 0) {
           let direction = 0;
           const dx = ev.clientX - startX, dy = ev.clientY - startY;
-          if(dx >= 5) direction |= RIGHT;
-          if(dx <= -5) direction |= LEFT;
-          if(dy >= 5) direction |= DOWN;
-          if(dy <= -5) direction |= UP;
-          let result = superpositionState_findStartClosestNode(direction, layoutBlocks);
+          if(dx >= MIND) direction |= RIGHT;
+          if(dx <= -MIND) direction |= LEFT;
+          if(dy >= MIND) direction |= DOWN;
+          if(dy <= -MIND) direction |= UP;
+          let result = superpositionState_findStartClosestNode(true, direction, layoutBlocks);
           if(result && result.node){
    // console.log("=====set start", result.node)
             const range = document.createRange();
@@ -770,7 +747,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
             // selection.removeAllRanges();
             window.getSelection().addRange(range);
           } else {
-            superpositionState_findStartClosestNode = findStartClosestNode(ev.clientX, ev.clientY, textLayer);
+            console.log("next findClosestTextNode")
+            superpositionState_findStartClosestNode = findClosestTextNode(ev.clientX, ev.clientY, textLayer);
           }
           
         }
@@ -807,7 +785,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
     
 
     if (e.detail === 2) {
-      const result = superpositionState_findStartClosestNode(0, layoutBlocks);
+      const result = superpositionState_findStartClosestNode(true, 0, layoutBlocks);
       if (result && result.node) {
         selectWordAtNode(result.node, result.offset);
         // Attach drag listener to allow extending from the word selection
@@ -818,7 +796,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
         
     // SHIFT CLICK LOGIC: Extend existing selection
     if (e.shiftKey && window.getSelection() && window.getSelection().rangeCount > 0) {
-      const result =  findStartClosestNode(e.clientX, e.clientY, textLayer)(0, layoutBlocks);
+      const result =  findClosestTextNode(e.clientX, e.clientY, textLayer)(true, 0, layoutBlocks);
       console.log("=====shift click extend selection", result)
       if(result && result.node) {
         try {
