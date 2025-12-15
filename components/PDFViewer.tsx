@@ -239,15 +239,15 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
           const nextR = nextSpan.getBoundingClientRect();
           
           if (clientX > r.right && clientX < nextR.left) {
-            if(start) {
-              if (direction & RIGHT) {
-                console.log("=====gutter direction right", nextSpan);
-                return getSafeResult(nextSpan, false);
-              } else if (direction & LEFT) {
-                console.log("=====gutter direction left", span);
-                return getSafeResult(span, true);
-              }
-            } 
+            // if(start) {
+            //   if (direction & RIGHT) {
+            //     console.log("=====gutter direction right", nextSpan);
+            //     return getSafeResult(nextSpan, false);
+            //   } else if (direction & LEFT) {
+            //     console.log("=====gutter direction left", span);
+            //     return getSafeResult(span, true);
+            //   }
+            // } 
             
             const selRect = getSelectionRect();
             if(selRect) {
@@ -259,27 +259,30 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
                 // 如果已经有选区了，那么除非鼠标明显进入选区外的block，优先选择选区所在的block的文字
                 const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
                 if (DOMRectUtils.isContains(layoutBlock, nextR)){
-                  console.log("=====gutter selRect right", nextSpan);
+                  console.log("=====gutter selRect right 1", nextSpan);
                   return getResult(nextSpan, false);
                 } else{
-                  console.log("=====gutter selRect left 2", span);
+                  console.log("=====gutter selRect left 1", span);
                   return getResult(span, true);
                 }
-                
-                // const distLeft = clientX - selRect.right;
-                // const distRight = nextR.left - clientX;
-                // if (distLeft <= distRight) {
-                //   console.log("=====gutter selRect left", span);
-                //   return getResult(span, true);
-                // } else {
-                //   console.log("=====gutter selRect right", nextSpan);
-                //   return getResult(nextSpan, false);
-                // }
+              } else if (clientX > r.right && clientX < selRect.left) {
+                // 如果已经有选区了，那么除非鼠标明显进入选区外的block，优先选择选区所在的block的文字
+                const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
+                if (DOMRectUtils.isContains(layoutBlock, r)){
+                  console.log("=====gutter selRect left 2", nextSpan);
+                  return getResult(span, true);
+                } else{
+                  console.log("=====gutter selRect right 2", span);
+                  return getResult(nextSpan, false);
+                }
               } 
             } 
 
             const leftLayoutBlock = layoutBlockOf(r, layoutBlocks);
             const rightLayoutBlock = layoutBlockOf(nextR, layoutBlocks);
+            if(leftLayoutBlock === null || rightLayoutBlock === null) {
+              throw new Error("Layout block not found: " + leftLayoutBlock + rightLayoutBlock);
+            };
             if(leftLayoutBlock === rightLayoutBlock){
               const distLeft = clientX - r.right;
               const distRight = nextR.left - clientX;
@@ -291,15 +294,12 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
                 return getSafeResult(nextSpan, false);
               }
             } else {
-              if (leftLayoutBlock ===null) {
-                console.log("=====gutter no left layout block", span, r);
-              }
               const distLeft = clientX - leftLayoutBlock.right;
               const distRight = rightLayoutBlock.left - clientX;
-              // debugger;
               if (distLeft <= distRight) {
                 console.log("=====gutter left layout block", span);
-                return getSafeResult(span, true);
+                // 如果刚开始选择且鼠标在文字右侧开始往下滑动则从文本头开始选择，其他的情况都从文本尾开始选择
+                return getSafeResult(span, !(start && !!(direction & DOWN)));
               } else {
                 console.log("=====gutter right layout block", nextSpan);
                 return getSafeResult(nextSpan, false);
@@ -321,55 +321,33 @@ const findStartClosestNode =  (clientX: number, clientY: number, layer: HTMLElem
 
   const spans = Array.from(layer.children) as HTMLElement[];
   if (spans.length === 0) return null;
-
+  const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
   
-console.log("findStartClosestNode fallback")
+
   let span;
-  let minDy = Infinity, minDx = Infinity, minDist = Infinity;
+  // let minDy = Infinity, minDx = Infinity;
+  let minDist = Infinity;
   for (const s of spans) {
-    if(s.firstChild == null) continue;
+    if(s.tagName !=="SPAN") continue;
     const r = s.getBoundingClientRect();
+    if(layoutBlock && !DOMRectUtils.isContains(layoutBlock, r)) continue;
      // x 权重小
-    const dx = (r.left - clientX) * .2;
-    const dy = r.top + r.height / 2 - clientY ;
+    const dx = Math.min(Math.abs(r.left - clientX), Math.abs(r.right - clientX)) * .2;
+    // const dy = r.top + r.height / 2 - clientY ;
+    const dy = Math.min(Math.abs(r.top - clientY), Math.abs(r.bottom - clientY))
     const dist = dx * dx  + dy * dy;
-    const e = Math.abs(dy - minDy);
-    // if(dy < minDy){
-    //   console.log("=====1");
-    //   span = s;
-    //   minDx = dx;
-    //   minDy = dy;
-    //   minDist = dist;
-      
-    // } else if(dy == minDy){
-    //   if(span.getBoundingClientRect().left > r.right){
-    //     console.log("=====2");
-    //     span = s;
-    //     minDx = dx;
-    //     minDy = dy;
-    //     minDist = dist;
-    //   }
-    // } 
+    
     if (dist <= minDist){
-      if(r.left > clientX && (direction & LEFT)){
-        continue;
-      }
-      span = s;
-      minDx = dx;
-      minDy = dy;
-      minDist = dist;
-      // if (!span || r.left < span.getBoundingClientRect().right ){
-      //   // console.log("=====1", s);
-      //   span = s;
-      //   minDx = dx;
-      //   minDy = dy;
-      //   minDist = dist;
+      // if(r.left > clientX && (direction & LEFT)){
+      //   continue;
       // }
+      span = s;
+      // minDx = dx, minDy = dy;
+      minDist = dist;
     }
-     
   }
   
-  
+  console.log("findStartClosestNode fallback", span)
   if (span) {
       return getSafeResult(span, clientX >= span.getBoundingClientRect().right);
   }
@@ -775,7 +753,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
             isDragging = true;
         }
         const layoutBlocks = computeLayoutBlocks(textLayer);
-  // setLayoutBlocks(computeLayoutBlocks(textLayerRef.current));
+  setLayoutBlocks(layoutBlocks);
         if(window.getSelection().rangeCount === 0) {
           let direction = 0;
           const dx = ev.clientX - startX, dy = ev.clientY - startY;
@@ -829,7 +807,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
     
 
     if (e.detail === 2) {
-      const result = superpositionState_findStartClosestNode(0);
+      const result = superpositionState_findStartClosestNode(0, layoutBlocks);
       if (result && result.node) {
         selectWordAtNode(result.node, result.offset);
         // Attach drag listener to allow extending from the word selection
@@ -840,16 +818,19 @@ const PDFPage: React.FC<PDFPageProps> = ({
         
     // SHIFT CLICK LOGIC: Extend existing selection
     if (e.shiftKey && window.getSelection() && window.getSelection().rangeCount > 0) {
-      const result = superpositionState_findStartClosestNode(0);
-      try {
+      const result =  findStartClosestNode(e.clientX, e.clientY, textLayer)(0, layoutBlocks);
+      console.log("=====shift click extend selection", result)
+      if(result && result.node) {
+        try {
           window.getSelection().extend(result.node, result.offset);
-      } catch (err) {
-        // Fallback to normal window.getSelection() if extend fails
-        const range = document.createRange();
-        range.setStart(result.node, result.offset);
-        range.collapse(true);
-        window.getSelection().removeAllRanges();
-        window.getSelection().addRange(range);
+        } catch (err) {
+          // Fallback to normal window.getSelection() if extend fails
+          const range = document.createRange();
+          range.setStart(result.node, result.offset);
+          range.collapse(true);
+          window.getSelection().removeAllRanges();
+          window.getSelection().addRange(range);
+        }
       }
     } else {
       window.getSelection().removeAllRanges();
