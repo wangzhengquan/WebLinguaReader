@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { PDFDocumentProxy } from '../types';
 import { extractTextFromPage, pdfjs } from '../services/pdfService';
 import { Loader2 as Loader2Icon } from 'lucide-react';
-
+import DOMRectUtils from '@/DOMRectUtils';
 interface PDFViewerProps {
   pdfDocument: PDFDocumentProxy | null;
   currentPage: number;
@@ -47,11 +47,97 @@ const getSafeResult = (span: HTMLElement, atEnd: boolean) => {
   else return getResult(span, atEnd);
 };
 
+const computeLayoutBlocks = (textLayer: HTMLElement): DOMRect[] => {
+  
+  // let spans = Array.from(layer.children) as HTMLElement[];
+  
+  // if (spans.length === 0) return blocks;
+  // spans = spans.filter(s => s.tagName === "SPAN")
+  const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_ELEMENT);
+  const spans: HTMLElement[] = [];
+  let node;
+  while(node = walker.nextNode()) {
+    if(node.tagName === "SPAN"){
+      spans.push(node as HTMLElement);
+      // console.log("-===== node:", node);
+    }
+      
+  }
+
+  if (spans.length === 0) return [];
+  const blocks: DOMRect[] = [];
+  let currentBlock: DOMRect | null = null;
+  let lastEle : HTMLElement | null = null;
+  for (const span of spans) {
+    const r = span.getBoundingClientRect()
+    
+    if (!currentBlock) {
+      currentBlock = r;
+      // currentEle = span;
+    } else {
+      // Check vertical overlap
+      if ((r.top - currentBlock.bottom < 50) 
+        && (Math.abs(r.left - currentBlock.left) < 20
+          || Math.abs(r.right - currentBlock.right) < 20
+          ||(r.left - currentBlock.right < 5 && r.left - currentBlock.right > 0)
+          || (currentBlock.left - r.left) * (currentBlock.right - r.right) < 0
+          || DOMRectUtils.isIntersect(currentBlock, r) 
+        )
+      ) {
+        // Merge into current block
+        currentBlock = DOMRectUtils.union(currentBlock, r);
+      } else {
+        // console.log("break==",currentBlock, "\nr====", r);
+        // No overlap, push current block and start new
+        blocks.push(currentBlock);
+        currentBlock = r;
+      }
+
+     
+    }
+    lastEle = span;
+  }
+
+  if (currentBlock) {
+    blocks.push(currentBlock);
+  }
+
+  blocks.sort((a, b) => {
+    // 首先比较 left
+    if (a.left !== b.left) {
+      return a.left - b.left;
+    }
+    // 如果 left 相等，再比较 top
+    return a.top - b.top;
+  });
+  return blocks;
+}
+
+function layoutBlockOf(rect: DOMRect, blocks: DOMRect[] ): DOMRect {
+  for (const block of blocks) {
+    if (DOMRectUtils.isContains(block, rect)) {
+      return block;
+    }
+  }
+  
+  return null;
+}
+
+function layoutBlockOfCoord(clientX: number, clientY: number, blocks: DOMRect[] ): DOMRect {
+  for (const block of blocks) {
+    if (DOMRectUtils.isContainsCoord(block, clientX, clientY)) {
+      return block;
+    }
+  }
+  return null;
+}
+
+
 /**
  * Helper: Find closest text node with Strict Row Priority.
  * Prevents selecting adjacent lines when in margins.
  */
-const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElement) => (start: boolean = false, direction: number) => {
+const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElement) => (start: boolean = false, direction: number, layoutBlocks: DOMRect[]) => {
   const spans = Array.from(layer.children) as HTMLElement[];
   if (spans.length === 0) return null;
 
@@ -61,11 +147,10 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
   const rowSpans = spans.filter(s => {
       const r = s.getBoundingClientRect();
       // s.tagName==='SPAN' &&
-      if (start){
-        return s.tagName==='SPAN' && clientY >= r.top && clientY <= r.bottom;
-      }
-      return  clientY >= r.top && clientY <= r.bottom;
+      return s.tagName==='SPAN' && clientY >= r.top && clientY <= r.bottom;
+      // return  clientY >= r.top && clientY <= r.bottom;
   });
+  // const layoutBlocks = computeLayoutBlocks(layer)
   // If on a row (or horizontal margin of a row)
   if (rowSpans.length > 0) {
       // Sort by X position
@@ -78,28 +163,48 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
 
       // Left Margin -> Start of First Span
       if (clientX < firstRect.left) {
-        if (start){
-          console.log('=====left margin, return null')
-          return null;
+        // if (start){
+        //   console.log('=====left margin, return null')
+        //   return null;
+        // }
+        // const selRect = getSelectionRect();
+        // if(selRect) {
+        // }
+       
+        if(layoutBlocks.length> 0 && clientX < layoutBlocks[0].left && firstRect.left < layoutBlocks[0].right) {
+          console.log('=====left margin 1', firstSpan)
+          // 沿着最左边选择，且firstSpan 不在第二栏
+          return getResult(firstSpan, false);
         }
-        return getResult(firstSpan, false);
+        const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
+        if (layoutBlock && DOMRectUtils.isContains(layoutBlock, firstRect) ){
+          console.log('=====left margin 2', firstSpan)
+          return getResult(firstSpan, false);
+        }
+        return null;
       }
       
       // Right Margin -> End of Last Span
       if (clientX > lastRect.right) {
         
-        const selRect = getSelectionRect();
-        // Todo 单栏的时候这个逻辑不对
-        if (selRect && selRect.left > lastRect.right) {
-          return null;
-        } 
-        
-        if (direction & RIGHT) {
-          console.log('=====right margin ')
-          return null;
+        // const selRect = getSelectionRect();
+        // if (selRect && !DOMRectUtils.isIntersect(layoutBlockOf(lastRect, layoutBlocks), selRect) ) {
+        //   return null;
+        // } 
+        if(layoutBlocks.length> 0 && clientX > layoutBlocks[layoutBlocks.length-1].right && lastRect.right > layoutBlocks[layoutBlocks.length-1].left) {
+          console.log('=====left margin 1', firstSpan)
+          // 沿着最左边选择，且firstSpan 不在第一栏
+          return getResult(lastSpan, true);
         }
-        
-        return getResult(lastSpan, true);
+        const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
+        if (layoutBlock && DOMRectUtils.isContains(layoutBlock, lastRect) ){
+          return getResult(lastSpan, true);
+        }
+        return null;
+        // if (direction & RIGHT) {
+        //   console.log('=====right margin ')
+        //   return null;
+        // }
       }
 
       // Inside the row (between words or columns)
@@ -132,43 +237,75 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
         if (i < rowSpans.length - 1) {
           const nextSpan = rowSpans[i+1];
           const nextR = nextSpan.getBoundingClientRect();
-          const selRect = getSelectionRect();
-          if(start) {
-            if (clientX > r.right && clientX < nextR.left) {
+          
+          if (clientX > r.right && clientX < nextR.left) {
+            if(start) {
               if (direction & RIGHT) {
-                console.log("=====gutter right", nextSpan);
+                console.log("=====gutter direction right", nextSpan);
                 return getSafeResult(nextSpan, false);
               } else if (direction & LEFT) {
-                console.log("=====gutter left", span);
+                console.log("=====gutter direction left", span);
                 return getSafeResult(span, true);
               }
-            }
-          } 
-          // else if (clientX > r.right && clientX < nextR.left) {
-          //     const distLeft = clientX - r.right;
-          //     const distRight = nextR.left - clientX;
-          //     if (distLeft <= distRight) {
-          //       console.log("=====gutter left", span);
-          //       return getSafeResult(span, true);
-          //     } else {
-          //       console.log("=====gutter right", nextSpan);
-          //       return getSafeResult(nextSpan, false);
-          //     }
-          // }
-          else if(selRect) {
-            if (clientX > selRect.right && clientX < nextR.left) {
-              const distLeft = clientX - selRect.right;
+            } 
+            
+            const selRect = getSelectionRect();
+            if(selRect) {
+              // if (clientX <= selRect.left) {
+              //   console.log("=====gutter selRect left", span);
+              //   return getResult(span, true);
+              // } 
+              if (clientX > selRect.right && clientX < nextR.left) {
+                // 如果已经有选区了，那么除非鼠标明显进入选区外的block，优先选择选区所在的block的文字
+                const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
+                if (DOMRectUtils.isContains(layoutBlock, nextR)){
+                  console.log("=====gutter selRect right", nextSpan);
+                  return getResult(nextSpan, false);
+                } else{
+                  console.log("=====gutter selRect left 2", span);
+                  return getResult(span, true);
+                }
+                
+                // const distLeft = clientX - selRect.right;
+                // const distRight = nextR.left - clientX;
+                // if (distLeft <= distRight) {
+                //   console.log("=====gutter selRect left", span);
+                //   return getResult(span, true);
+                // } else {
+                //   console.log("=====gutter selRect right", nextSpan);
+                //   return getResult(nextSpan, false);
+                // }
+              } 
+            } 
+
+            const leftLayoutBlock = layoutBlockOf(r, layoutBlocks);
+            const rightLayoutBlock = layoutBlockOf(nextR, layoutBlocks);
+            if(leftLayoutBlock === rightLayoutBlock){
+              const distLeft = clientX - r.right;
               const distRight = nextR.left - clientX;
               if (distLeft <= distRight) {
-                console.log("=====gutter selRect left", span);
-                return getResult(span, true);
+                console.log("=====gutter left", span);
+                return getSafeResult(span, true);
               } else {
-                console.log("=====gutter selRect right", nextSpan);
-                return getResult(nextSpan, false);
+                console.log("=====gutter right", nextSpan);
+                return getSafeResult(nextSpan, false);
+              }
+            } else {
+              if (leftLayoutBlock ===null) {
+                console.log("=====gutter no left layout block", span, r);
+              }
+              const distLeft = clientX - leftLayoutBlock.right;
+              const distRight = rightLayoutBlock.left - clientX;
+              // debugger;
+              if (distLeft <= distRight) {
+                console.log("=====gutter left layout block", span);
+                return getSafeResult(span, true);
+              } else {
+                console.log("=====gutter right layout block", nextSpan);
+                return getSafeResult(nextSpan, false);
               }
             }
-          } 
-           
+          }
         }
       }
   } 
@@ -176,14 +313,16 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
 };
   
 
-const epsilon = 0.1;
+// const epsilon = 0.1;
 
-const findStartClosestNode =  (clientX: number, clientY: number, layer: HTMLElement) => (direction: number) => {
-  const res = findClosestTextNode(clientX, clientY, layer)(true, direction);
+const findStartClosestNode =  (clientX: number, clientY: number, layer: HTMLElement) => (direction: number, layoutBlocks: DOMRect[]) => {
+  const res = findClosestTextNode(clientX, clientY, layer)(true, direction, layoutBlocks);
   if(res && res.node) return res;
 
   const spans = Array.from(layer.children) as HTMLElement[];
   if (spans.length === 0) return null;
+
+  
 console.log("findStartClosestNode fallback")
   let span;
   let minDy = Infinity, minDx = Infinity, minDist = Infinity;
@@ -332,6 +471,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
   const [dimensions, setDimensions] = useState<{width: number, height: number} | null>(null);
   const renderTaskRef = useRef<any>(null);
   const [highlights, setHighlights] = useState<DOMRect[]>([]);
+  const [layoutBlocks, setLayoutBlocks] = useState<DOMRect[]>([]);
 
   // Update state if forcePreload changes
   useEffect(() => {
@@ -407,92 +547,89 @@ const PDFPage: React.FC<PDFPageProps> = ({
       setHighlights([]);
       return;
     }
+    const findRobustRects = (textLayer) => {
+      const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT);
+      const nodes: Text[] = [];
+      let node;
+      while(node = walker.nextNode()) {
+          nodes.push(node as Text);
+      }
 
-    const textLayer = textLayerRef.current;
-    
-    // Defer highlighting to next tick to ensure DOM is ready
-    const timer = setTimeout(() => {
-        const findRobustRects = () => {
-        const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT);
-        const nodes: Text[] = [];
-        let node;
-        while(node = walker.nextNode()) {
-            nodes.push(node as Text);
-        }
+      if (nodes.length === 0) return [];
 
-        if (nodes.length === 0) return [];
+      const fullText = nodes.map(n => n.textContent).join('');
+      const normalize = (s: string) => s.replace(/[\s\r\n]+/g, '').toLowerCase();
+      const searchNorm = normalize(highlightedText);
+      const textNorm = normalize(fullText);
 
-        const fullText = nodes.map(n => n.textContent).join('');
-        const normalize = (s: string) => s.replace(/[\s\r\n]+/g, '').toLowerCase();
-        const searchNorm = normalize(highlightedText);
-        const textNorm = normalize(fullText);
+      const startIndexNorm = textNorm.indexOf(searchNorm);
+      if (startIndexNorm === -1) return [];
 
-        const startIndexNorm = textNorm.indexOf(searchNorm);
-        if (startIndexNorm === -1) return [];
+      const endIndexNorm = startIndexNorm + searchNorm.length;
+      let currentNormIndex = 0;
+      let startNode: Text | null = null;
+      let startOffset = -1;
+      let endNode: Text | null = null;
+      let endOffset = -1;
 
-        const endIndexNorm = startIndexNorm + searchNorm.length;
-        let currentNormIndex = 0;
-        let startNode: Text | null = null;
-        let startOffset = -1;
-        let endNode: Text | null = null;
-        let endOffset = -1;
+      for (const textNode of nodes) {
+          const nodeText = textNode.textContent || "";
+          const nodeTextNorm = normalize(nodeText);
+          const nodeLen = nodeTextNorm.length;
 
-        for (const textNode of nodes) {
-            const nodeText = textNode.textContent || "";
-            const nodeTextNorm = normalize(nodeText);
-            const nodeLen = nodeTextNorm.length;
-
-            if (startNode === null) {
+          if (startNode === null) {
             if (currentNormIndex + nodeLen > startIndexNorm) {
-                startNode = textNode;
-                const needed = startIndexNorm - currentNormIndex;
-                let seen = 0;
-                for (let i = 0; i < nodeText.length; i++) {
+              startNode = textNode;
+              const needed = startIndexNorm - currentNormIndex;
+              let seen = 0;
+              for (let i = 0; i < nodeText.length; i++) {
                 if (!/[\s\r\n]/.test(nodeText[i])) seen++;
                 if (seen > needed) {
                     startOffset = i;
                     break;
                 }
-                }
-                if (startOffset === -1) startOffset = 0;
+              }
+              if (startOffset === -1) startOffset = 0;
             }
-            }
+          }
 
-            if (startNode !== null && endNode === null) {
-            if (currentNormIndex + nodeLen >= endIndexNorm) {
-                endNode = textNode;
-                const needed = endIndexNorm - currentNormIndex;
-                let seen = 0;
-                for (let i = 0; i < nodeText.length; i++) {
+          if (startNode !== null && endNode === null) {
+          if (currentNormIndex + nodeLen >= endIndexNorm) {
+              endNode = textNode;
+              const needed = endIndexNorm - currentNormIndex;
+              let seen = 0;
+              for (let i = 0; i < nodeText.length; i++) {
                 if (!/[\s\r\n]/.test(nodeText[i])) seen++;
                 if (seen === needed) {
                     endOffset = i + 1;
                     break;
                 }
-                }
-                if (endOffset === -1) endOffset = nodeText.length;
-            }
-            }
-            
-            currentNormIndex += nodeLen;
-            if (startNode && endNode) break;
-        }
+              }
+              if (endOffset === -1) endOffset = nodeText.length;
+          }
+          }
+          
+          currentNormIndex += nodeLen;
+          if (startNode && endNode) break;
+      }
 
-        if (startNode && endNode) {
-            try {
-                const range = document.createRange();
-                range.setStart(startNode, startOffset);
-                range.setEnd(endNode, endOffset);
-                return Array.from(range.getClientRects());
-            } catch(e) {
-                return [];
-            }
-        }
-        return [];
-        };
-
-        const rects = findRobustRects();
-        setHighlights(rects);
+      if (startNode && endNode) {
+          try {
+              const range = document.createRange();
+              range.setStart(startNode, startOffset);
+              range.setEnd(endNode, endOffset);
+              return Array.from(range.getClientRects());
+          } catch(e) {
+              return [];
+          }
+      }
+      return [];
+    };
+    // Defer highlighting to next tick to ensure DOM is ready
+    const timer = setTimeout(() => {
+      const textLayer = textLayerRef.current;
+      const rects = findRobustRects(textLayer);
+      setHighlights(rects);
     }, 50);
 
     return () => clearTimeout(timer);
@@ -516,7 +653,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
       }
 
       setIsLoading(true);
-      
       let page;
       try {
         page = await pdfDocument.getPage(pageNumber);
@@ -583,7 +719,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
              viewport: viewport,
              textDivs: []
            }).promise;
-         } catch(e) {}
+           
+    // console.log("Computed layout blocks:", layoutBlocks);
+         } catch(e) {
+            console.error("Error rendering text layer", e);
+         }
       }
 
       if (!isCancelled) {
@@ -594,6 +734,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
     };
 
     renderPage();
+    
 
     return () => {
       isCancelled = true;
@@ -613,13 +754,13 @@ const PDFPage: React.FC<PDFPageProps> = ({
   const handleMouseDown = (e: React.MouseEvent) => {
     // Ignore non-left clicks (e.g. Right Click for Context Menu) to preserve selection
     if (e.button !== 0) return;
-console.log("=====", e.target)
+// console.log("=====", e.target)
     const textLayer = textLayerRef.current;
     if (!textLayer) return;
-
+    
     // FORCE custom selection logic everywhere
     e.preventDefault(); 
-
+    
     let superpositionState_findStartClosestNode = findStartClosestNode(e.clientX, e.clientY, textLayer);
     
     const handleDragSelection = (startX: number, startY: number) => {
@@ -633,11 +774,18 @@ console.log("=====", e.target)
             if (dist < 5) return;
             isDragging = true;
         }
+        const layoutBlocks = computeLayoutBlocks(textLayer);
+  // setLayoutBlocks(computeLayoutBlocks(textLayerRef.current));
         if(window.getSelection().rangeCount === 0) {
-          const direction = (ev.clientX >= startX ? RIGHT : LEFT) | (ev.clientY - startY >= 0 ? DOWN : UP);
-          let result = superpositionState_findStartClosestNode(direction);
+          let direction = 0;
+          const dx = ev.clientX - startX, dy = ev.clientY - startY;
+          if(dx >= 5) direction |= RIGHT;
+          if(dx <= -5) direction |= LEFT;
+          if(dy >= 5) direction |= DOWN;
+          if(dy <= -5) direction |= UP;
+          let result = superpositionState_findStartClosestNode(direction, layoutBlocks);
           if(result && result.node){
-            console.log("=====set start", result.node)
+   // console.log("=====set start", result.node)
             const range = document.createRange();
             range.setStart(result.node, result.offset);
             range.collapse(true);
@@ -657,7 +805,7 @@ console.log("=====", e.target)
         if (!layer && textLayer) layer = textLayer; // Fallback to start page if void
   
         if (layer) {
-            const result = findClosestTextNode(ev.clientX, ev.clientY, layer)(false, 0);
+            const result = findClosestTextNode(ev.clientX, ev.clientY, layer)(false, 0, layoutBlocks);
             if (result && result.node) {
               if (window.getSelection().rangeCount > 0) window.getSelection().extend(result.node, result.offset);
             }
@@ -678,11 +826,10 @@ console.log("=====", e.target)
       window.addEventListener('mouseup', handleMouseUp);
     }
 
-    window.getSelection().removeAllRanges();
+    
 
     if (e.detail === 2) {
       const result = superpositionState_findStartClosestNode(0);
-      
       if (result && result.node) {
         selectWordAtNode(result.node, result.offset);
         // Attach drag listener to allow extending from the word selection
@@ -705,9 +852,10 @@ console.log("=====", e.target)
         window.getSelection().addRange(range);
       }
     } else {
+      window.getSelection().removeAllRanges();
       handleDragSelection(e.clientX, e.clientY);
     }
-  };
+  }
 
   const width = dimensions ? dimensions.width : 600;
   const height = dimensions ? dimensions.height : 800;
@@ -744,6 +892,30 @@ console.log("=====", e.target)
                         />
                     );
                 })}
+
+                {layoutBlocks.map((rect, i) => {
+                  // const rel  = rect;
+                  // console.log("===textLayerRef.current", textLayerRef.current)
+                  // const rel = textLayerRef.current ? getRelativeRect(rect, textLayerRef.current) : rect;
+                  const rel = getRelativeRect(rect, textLayerRef.current);
+                  return (
+                      <div 
+                          key={i}
+                          className="absolute pointer-events-none z-10 mix-blend-multiply"
+                          style={{
+                              top: rel.top,
+                              left: rel.left,
+                              width: rel.width,
+                              height: rel.height,
+                              border: '1px solid red',
+                              // backgroundColor: 'rgba(253, 224, 71, 0.5)'
+                          }}
+                      />
+                  );
+                })}
+              
+                
+                 
             </>
         ) : (
              <div className="flex items-center justify-center h-full bg-slate-50 text-slate-300">

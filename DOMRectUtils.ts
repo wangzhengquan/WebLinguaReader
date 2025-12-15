@@ -1,4 +1,4 @@
-export class DOMRectUtils {
+export default class DOMRectUtils {
   /**
    * Returns a new DOMRect that is the union of two DOMRect objects.
    * The resulting DOMRect encompasses both input rectangles.
@@ -27,12 +27,25 @@ export class DOMRectUtils {
   /**
    * Checks if the first DOMRect completely contains the second DOMRect.
    */
-  static contains(outer: DOMRect, inner: DOMRect): boolean {
+  static isContains(outer: DOMRect, inner: DOMRect): boolean {
+    if(outer === null || inner === null) return false;
     return (
       outer.left <= inner.left &&
       outer.right >= inner.right &&
       outer.top <= inner.top &&
       outer.bottom >= inner.bottom
+    );
+  }
+
+  static isContainsCoord(outer: DOMRect, clientX: number, clientY: number): boolean {
+    if(outer === null) {
+      return false;
+    } 
+    return (
+      outer.left <= clientX &&
+      outer.right >= clientX &&
+      outer.top <= clientY &&
+      outer.bottom >= clientY
     );
   }
 }

@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       test: {
-        environment: 'jsdom',
+        environment: 'happy-dom',
         globals: true
       },
       define: {

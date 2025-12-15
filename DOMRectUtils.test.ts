@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DOMRectUtils } from './DOMRectUtils';
+import DOMRectUtils from './DOMRectUtils';
 
 describe('DOMRectUtils', () => {
   it('should calculate the union of two overlapping rectangles', () => {
