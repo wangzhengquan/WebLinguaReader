@@ -6,8 +6,7 @@ import { PDFDocumentProxy,
   RIGHT } from '../types';
 import { extractTextFromPage, pdfjs } from '../services/pdfService';
 import { CloudSnow, Loader2 as Loader2Icon } from 'lucide-react';
-import {computeLayoutBlocks, getPreferredTextNode, selectWordAtNode} from '@/SelectionUtils';
-import DOMRectUtils from '@/DOMRectUtils';
+import {computeLayoutBlocks, getSelectNodeBy, selectWordAtNode, DOMRectUtils} from '../selection';
 interface PDFViewerProps {
   pdfDocument: PDFDocumentProxy | null;
   currentPage: number;
@@ -356,10 +355,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
     // FORCE custom selection logic everywhere
     e.preventDefault(); 
     const blocks = computeLayoutBlocks(textLayer);
-// setLayoutBlocks(blocks);
+setLayoutBlocks(blocks);
     const MIND = 3;
     console.log("handleMouseDown==", e.clientX, e.clientY)
-    let superpositionState_findStartClosestNode = getPreferredTextNode(e.clientX, e.clientY, textLayer);
+    let superpositionState_findStartClosestNode = getSelectNodeBy(e.clientX, e.clientY, textLayer);
     
     const handleDragSelection = (startX: number, startY: number) => {
       // let startX = e.clientX, startY = e.clientY;
@@ -389,8 +388,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
             // selection.removeAllRanges();
             window.getSelection().addRange(range);
           } else {
-            console.log("next getPreferredTextNode")
-            superpositionState_findStartClosestNode = getPreferredTextNode(ev.clientX, ev.clientY, textLayer);
+            console.log("next getSelectNodeBy")
+            superpositionState_findStartClosestNode = getSelectNodeBy(ev.clientX, ev.clientY, textLayer);
           }
           
         }
@@ -403,7 +402,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
         if (!layer && textLayer) layer = textLayer; // Fallback to start page if void
   
         if (layer) {
-            const result = getPreferredTextNode(ev.clientX, ev.clientY, layer)(false, 0, blocks);
+            const result = getSelectNodeBy(ev.clientX, ev.clientY, layer)(false, 0, blocks);
             if (result && result.node) {
               if (window.getSelection().rangeCount > 0) window.getSelection().extend(result.node, result.offset);
             }
@@ -438,7 +437,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
         
     // SHIFT CLICK LOGIC: Extend existing selection
     if (e.shiftKey && window.getSelection() && window.getSelection().rangeCount > 0) {
-      const result =  getPreferredTextNode(e.clientX, e.clientY, textLayer)(true, 0, blocks);
+      const result =  getSelectNodeBy(e.clientX, e.clientY, textLayer)(true, 0, blocks);
       console.log("=====shift click extend selection", result)
       if(result && result.node) {
         try {

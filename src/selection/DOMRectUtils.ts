@@ -20,10 +20,10 @@ export default class DOMRectUtils {
   static isIntersect(rect1: DOMRect | null, rect2: DOMRect | null): boolean {
     if (rect1 === null || rect2 === null) return false;
     return (
-      rect1.left < rect2.right &&
-      rect1.right > rect2.left &&
-      rect1.top < rect2.bottom &&
-      rect1.bottom > rect2.top
+      rect1.left <= rect2.right &&
+      rect1.right >= rect2.left &&
+      rect1.top <= rect2.bottom &&
+      rect1.bottom >= rect2.top
     );
   }
 
