@@ -443,7 +443,6 @@ setLayoutBlocks(blocks);
         // Attach drag listener to allow extending from the word selection
         handleDragSelection();
       }
-      // return;
     }
     // SHIFT CLICK LOGIC: Extend existing selection
     else if (e.shiftKey && window.getSelection() && window.getSelection().rangeCount > 0) {

@@ -124,7 +124,7 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
         const r = span.getBoundingClientRect();
         // Hovering this span
         if (clientX >= r.left && clientX <= r.right) {
-          highPrecisionSelectionNode(span, clientX, clientY);
+          return highPrecisionSelectionNode(span, clientX, clientY);
         }
 
         if (i < rowSpans.length - 1) {
