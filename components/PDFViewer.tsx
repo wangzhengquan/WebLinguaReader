@@ -317,7 +317,7 @@ const findClosestTextNode = (clientX: number, clientY: number, layer: HTMLElemen
     const r = s.getBoundingClientRect();
     if(mouseBlock && !DOMRectUtils.isContains(mouseBlock, r)) continue;
     // 如果已经有选区了，那么除非鼠标明显进入选区外的block，优先选择选区所在的block的文字
-    if(selBlock && !DOMRectUtils.isContains(selBlock, span) && !DOMRectUtils.isContains(mouseBlock, r) ) continue;
+    if(selBlock && !DOMRectUtils.isContains(selBlock, r) && !DOMRectUtils.isContains(mouseBlock, r) ) continue;
      // x 权重小
     const dx = Math.min(Math.abs(r.left - clientX), Math.abs(r.right - clientX)) * .2;
     // const dy = r.top + r.height / 2 - clientY ;
