@@ -21,7 +21,7 @@ const computeLayoutBlocks = (textLayer: HTMLElement): DOMRect[] => {
       currentBlock = r;
     } else {
       // Check vertical overlap
-      if ((r.top - currentBlock.bottom < 50)
+      if ((r.top - currentBlock.bottom < 20)
         && (Math.abs(r.left - currentBlock.left) < 20
           || Math.abs(r.right - currentBlock.right) < 20
           || (r.left - currentBlock.right < 5 && r.left - currentBlock.right > 0)

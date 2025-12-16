@@ -354,16 +354,17 @@ const PDFPage: React.FC<PDFPageProps> = ({
     
     // FORCE custom selection logic everywhere
     e.preventDefault(); 
-    const blocks = computeLayoutBlocks(textLayer);
+    let blocks = computeLayoutBlocks(textLayer);
 setLayoutBlocks(blocks);
     const MIND = 3;
     console.log("handleMouseDown==", e.clientX, e.clientY)
-    let superpositionState_findStartClosestNode = getSelectNodeBy(e.clientX, e.clientY, textLayer);
-    
-    const handleDragSelection = (startX: number, startY: number) => {
+    // let superpositionState_getSelectNodeBy = getSelectNodeBy(e.clientX, e.clientY, textLayer);
+    const startX = e.clientX, startY = e.clientY;
+
+    const handleDragSelection = () => {
       // let startX = e.clientX, startY = e.clientY;
       // const textLayer = textLayerRef.current;
-      // let superpositionState_findStartClosestNode = findStartClosestNode(startX, startY, textLayer);
+      // let superpositionState_getSelectNodeBy = findStartClosestNode(startX, startY, textLayer);
       let isDragging = false;
       const handleMouseMove = (ev: MouseEvent) => {
         if (!isDragging) {
@@ -379,19 +380,19 @@ setLayoutBlocks(blocks);
           if(dx <= -MIND) direction |= LEFT;
           if(dy >= MIND) direction |= DOWN;
           if(dy <= -MIND) direction |= UP;
-          let result = superpositionState_findStartClosestNode(true, direction, blocks);
+          let result = getSelectNodeBy(e.clientX, e.clientY, textLayer, direction, blocks, true);
           if(result && result.node){
    // console.log("=====set start", result.node)
             const range = document.createRange();
             range.setStart(result.node, result.offset);
             range.collapse(true);
-            // selection.removeAllRanges();
             window.getSelection().addRange(range);
-          } else {
-            console.log("next getSelectNodeBy")
-            superpositionState_findStartClosestNode = getSelectNodeBy(ev.clientX, ev.clientY, textLayer);
-          }
-          
+          } 
+          // else {
+          //   console.log("next getSelectNodeBy")
+          //   superpositionState_getSelectNodeBy = getSelectNodeBy(ev.clientX, ev.clientY, textLayer);
+          // }
+          return;
         }
         
         // Dynamic Layer Detection for Cross-Page Selection
@@ -400,9 +401,14 @@ setLayoutBlocks(blocks);
         
         let layer = pageWrapper?.querySelector('.textLayer') as HTMLElement;
         if (!layer && textLayer) layer = textLayer; // Fallback to start page if void
-  
+  console.log("layer === textLayer", layer === textLayer)
+        if(layer !== textLayer) {
+          blocks = computeLayoutBlocks(layer);
+          setLayoutBlocks(blocks);
+        }
+
         if (layer) {
-            const result = getSelectNodeBy(ev.clientX, ev.clientY, layer)(false, 0, blocks);
+            const result = getSelectNodeBy(ev.clientX, ev.clientY, layer, 0, blocks, false);
             if (result && result.node) {
               if (window.getSelection().rangeCount > 0) window.getSelection().extend(result.node, result.offset);
             }
@@ -426,18 +432,17 @@ setLayoutBlocks(blocks);
     
 
     if (e.detail === 2) {
-      const result = superpositionState_findStartClosestNode(true, 0, blocks);
+      const result = getSelectNodeBy(startX, startY, textLayer, 0, blocks, true);
       if (result && result.node) {
         selectWordAtNode(result.node, result.offset);
         // Attach drag listener to allow extending from the word selection
-        handleDragSelection(e.clientX, e.clientY);
+        handleDragSelection();
         return;
       }
     }
-        
     // SHIFT CLICK LOGIC: Extend existing selection
-    if (e.shiftKey && window.getSelection() && window.getSelection().rangeCount > 0) {
-      const result =  getSelectNodeBy(e.clientX, e.clientY, textLayer)(true, 0, blocks);
+    else if (e.shiftKey && window.getSelection() && window.getSelection().rangeCount > 0) {
+      const result =  getSelectNodeBy(e.clientX, e.clientY, textLayer, 0, blocks, true);
       console.log("=====shift click extend selection", result)
       if(result && result.node) {
         try {
@@ -453,7 +458,7 @@ setLayoutBlocks(blocks);
       }
     } else {
       window.getSelection().removeAllRanges();
-      handleDragSelection(e.clientX, e.clientY);
+      handleDragSelection();
     }
   }
 
