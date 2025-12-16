@@ -24,9 +24,12 @@ const computeLayoutBlocks = (textLayer: HTMLElement): DOMRect[] => {
       if (
         DOMRectUtils.isIntersect(currentBlock, r) ||
         (
+          r.top >= currentBlock.top && r.bottom <= currentBlock.bottom && r.left - currentBlock.right <= 10 && r.left - currentBlock.right > 0
+        ) ||
+        (
           (Math.abs(r.top - currentBlock.bottom) < 20) && 
-          ( Math.abs(r.left - currentBlock.left) < 20
-            || Math.abs(r.right - currentBlock.right) < 20
+          ( Math.abs(r.left - currentBlock.left) < 25
+            || Math.abs(r.right - currentBlock.right) < 25
             || (r.left - currentBlock.right < 5 && r.left - currentBlock.right > 0)
             // || DOMRectUtils.isIntersect(currentBlock, r)
           )
