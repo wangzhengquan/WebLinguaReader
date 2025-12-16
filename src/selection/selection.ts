@@ -19,13 +19,14 @@ const getSelectionRect = () => {
 const getResult = (span: HTMLElement, atEnd: boolean) => {
   return {
     node: span.firstChild,
-    offset: atEnd ? (span.textContent?.length || 0) : 0
+    offset: atEnd ? (span.textContent?.length || 0) : 0,
+    span
   };
 };
 
 const getSafeResult = (span: HTMLElement, atEnd: boolean) => {
   if (!span.firstChild)
-    return { node: span, offset: 0 }
+    return { node: span, offset: 0, span}
   else return getResult(span, atEnd);
 };
 
@@ -34,13 +35,14 @@ const getClosestTextNodeOfSpans = (clientX: number, clientY: number, spans: HTML
   if (!spans || spans.length === 0) return null;
   const distance = (r: DOMRect) => {
     // x 权重小
-    const dx = Math.min(Math.abs(r.left - clientX), Math.abs(r.right - clientX));
+    const dx = Math.min(Math.abs(r.left - clientX), Math.abs(r.right - clientX)) * .2;
     // const dy = r.top + r.height / 2 - clientY ;
     const dy = Math.min(Math.abs(r.top + r.height / 2 - clientY), Math.abs(r.bottom - r.height / 2 - clientY))
     const dist = dx * dx + dy * dy;
     return dist;
   }
   let span = spans[0];
+  // console.log("spans.length=======", spans.length)
   let minDist = distance(span.getBoundingClientRect());
   for (let i = 1; i < spans.length; i++) {
     const s = spans[i];
@@ -51,6 +53,10 @@ const getClosestTextNodeOfSpans = (clientX: number, clientY: number, spans: HTML
       span = s;
       minDist = dist;
     }
+    // console.log("getClosestTextNodeOfSpans checking span=", s, dist, minDist)
+    // if(s.textContent==='// jump to ret statement'){
+    //   console.log("========getClosestTextNodeOfSpans special span=", s, dist, minDist)
+    // }
   }
 
   const spanRect = span.getBoundingClientRect();
@@ -102,12 +108,12 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
           if (doc.caretPositionFromPoint) {
             const pos = doc.caretPositionFromPoint(clientX, clientY);
             if (pos && (pos.offsetNode === span.firstChild || pos.offsetNode === span)) {
-              return { node: pos.offsetNode, offset: pos.offset };
+              return { node: pos.offsetNode, offset: pos.offset, span };
             }
           } else if (doc.caretRangeFromPoint) {
             const range = doc.caretRangeFromPoint(clientX, clientY);
             if (range && (range.startContainer === span.firstChild || range.startContainer === span)) {
-              return { node: range.startContainer, offset: range.startOffset };
+              return { node: range.startContainer, offset: range.startOffset, span };
             }
           } else {
             // Fallback to simpler midpoint check
@@ -140,7 +146,7 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
   }
 }
 
-const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, direction: number, layoutBlocks: DOMRect[], start: boolean ) => {
+const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, layoutBlocks: DOMRect[], direction: number, start: boolean ) => {
   let spans = Array.from(layer.children) as HTMLElement[];
   spans = spans.filter(s => s.tagName === "SPAN")
   if (spans.length === 0) return null;
@@ -165,13 +171,18 @@ const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, d
       const r = s.getBoundingClientRect();
       return DOMRectUtils.contains(selBlock, r);
     });
-    console.log("getSelectNodeBy in selRect", selBlock, selBlockSpans);
+    console.log("=====getSelectNodeBy in selBlock ", selBlockSpans, DOMRectUtils.equals(selBlock, selRect));
+    // if (!DOMRectUtils.equals(selBlock, selRect)){
+    //   // 如果selBlock和selRect是同一块区域就没必要再选择了，会跳出这一段在全部spans中选择。 但是如果是撤销选择呢？
+    //   const result = getSelectNodeOfSpans(clientX, clientY, selBlockSpans, direction, start);
+    //   if (result && result.node ) return result;
+    // }
     const result = getSelectNodeOfSpans(clientX, clientY, selBlockSpans, direction, start);
-    if (result && result.node) return result;
+    if (result && result.node ) return result;
   }
 
   console.log("getSelectNodeBy in all spans");
-  return getSelectNodeOfSpans(clientX, clientY, spans, direction, start);
+  return getClosestTextNodeOfSpans(clientX, clientY, spans, direction, start);
 
 };
 

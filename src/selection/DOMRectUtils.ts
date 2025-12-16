@@ -68,6 +68,17 @@ export default class DOMRectUtils {
     );
   }
 
+  static equals(rect1: DOMRect | null, rect2: DOMRect | null): boolean {
+    if (rect1 === null && rect2 === null) return true;
+    if (rect1 === null || rect2 === null) return false;
+    return (
+      rect1.x === rect2.x &&
+      rect1.y === rect2.y &&
+      rect1.width === rect2.width &&
+      rect1.height === rect2.height
+    );
+  }
+
   static toString(rect: DOMRect | null): string {
     if (rect === null) return 'null';
     return `{${rect.x}, ${rect.y}, ${rect.width}, ${rect.height}}`;

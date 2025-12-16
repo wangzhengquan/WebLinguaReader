@@ -380,7 +380,7 @@ setLayoutBlocks(blocks);
           if(dx <= -MIND) direction |= LEFT;
           if(dy >= MIND) direction |= DOWN;
           if(dy <= -MIND) direction |= UP;
-          let result = getSelectNodeBy(e.clientX, e.clientY, textLayer, direction, blocks, true);
+          let result = getSelectNodeBy(e.clientX, e.clientY, textLayer, blocks, direction, true);
           if(result && result.node){
    // console.log("=====set start", result.node)
             const range = document.createRange();
@@ -408,7 +408,7 @@ setLayoutBlocks(blocks);
         }
 
         if (layer) {
-            const result = getSelectNodeBy(ev.clientX, ev.clientY, layer, 0, blocks, false);
+            const result = getSelectNodeBy(ev.clientX, ev.clientY, layer, blocks, 0,  false);
             if (result && result.node) {
               if (window.getSelection().rangeCount > 0) window.getSelection().extend(result.node, result.offset);
             }
@@ -432,7 +432,7 @@ setLayoutBlocks(blocks);
     
 
     if (e.detail === 2) {
-      const result = getSelectNodeBy(startX, startY, textLayer, 0, blocks, true);
+      const result = getSelectNodeBy(startX, startY, textLayer, blocks, 0,  true);
       if (result && result.node) {
         selectWordAtNode(result.node, result.offset);
         // Attach drag listener to allow extending from the word selection
@@ -442,7 +442,7 @@ setLayoutBlocks(blocks);
     }
     // SHIFT CLICK LOGIC: Extend existing selection
     else if (e.shiftKey && window.getSelection() && window.getSelection().rangeCount > 0) {
-      const result =  getSelectNodeBy(e.clientX, e.clientY, textLayer, 0, blocks, true);
+      const result =  getSelectNodeBy(e.clientX, e.clientY, textLayer, blocks, 0, true);
       console.log("=====shift click extend selection", result)
       if(result && result.node) {
         try {

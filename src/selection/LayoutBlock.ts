@@ -34,7 +34,13 @@ const computeLayoutBlocks = (textLayer: HTMLElement): DOMRect[] => {
       } else {
         // console.log("break==",currentBlock, "\nr====", r);
         // No overlap, push current block and start new
-        blocks.push(currentBlock);
+        
+        if(blocks.length > 0 && DOMRectUtils.intersect(currentBlock, blocks[blocks.length - 1])) {
+          blocks[blocks.length - 1] = DOMRectUtils.union(currentBlock, blocks[blocks.length - 1]);
+        } else {
+          blocks.push(currentBlock);
+        }
+        
         currentBlock = r;
       }
     }
@@ -44,14 +50,30 @@ const computeLayoutBlocks = (textLayer: HTMLElement): DOMRect[] => {
     blocks.push(currentBlock);
   }
 
-  // blocks.sort((a, b) => {
-  //   // 首先比较 left
-  //   if (a.left !== b.left) {
-  //     return a.left - b.left;
+  blocks.sort((a, b) => {
+    // 首先比较 left
+    if (a.left !== b.left) {
+      return a.left - b.left;
+    }
+    // 如果 left 相等，再比较 top
+    return a.top - b.top;
+  });
+  // for (let i = 0; i < blocks.length; i++) {
+  //   for (let j = i + 1; j < blocks.length; j++) {
+  //     if (DOMRectUtils.isIntersect(blocks[i], blocks[j])) {
+  //       blocks[i] = DOMRectUtils.union(blocks[i], blocks[j]);
+  //       blocks.splice(j, 1);
+  //       j--;
+  //     }
   //   }
-  //   // 如果 left 相等，再比较 top
-  //   return a.top - b.top;
-  // });
+  // }
+  for (let i = 0; i < blocks.length-1; i++) {
+    if (DOMRectUtils.isIntersect(blocks[i], blocks[i+1])){
+      blocks[i] = DOMRectUtils.union(blocks[i], blocks[i+1]);
+      blocks.splice(i+1, 1);
+      i--;
+    }
+  }
   return blocks;
 }
 
