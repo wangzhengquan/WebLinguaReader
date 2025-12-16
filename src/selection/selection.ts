@@ -16,7 +16,7 @@ const getSelectionRect = () => {
 }
 
 
-const getResult = (span: HTMLElement, atEnd: boolean) => {
+const selectionNode = (span: HTMLElement, atEnd: boolean) => {
   return {
     node: span.firstChild,
     offset: atEnd ? (span.textContent?.length || 0) : 0,
@@ -24,11 +24,32 @@ const getResult = (span: HTMLElement, atEnd: boolean) => {
   };
 };
 
-const getSafeResult = (span: HTMLElement, atEnd: boolean) => {
-  if (!span.firstChild)
-    return { node: span, offset: 0, span}
-  else return getResult(span, atEnd);
-};
+const highPrecisionSelectionNode = (span: HTMLElement, clientX: number, clientY: number) => {
+  // Try high-precision selection if native API supports it
+  const doc = document as any;
+  if (doc.caretPositionFromPoint) {
+    const pos = doc.caretPositionFromPoint(clientX, clientY);
+    if (pos && (pos.offsetNode === span.firstChild || pos.offsetNode === span)) {
+      return { node: pos.offsetNode, offset: pos.offset, span };
+    }
+  } else if (doc.caretRangeFromPoint) {
+    const range = doc.caretRangeFromPoint(clientX, clientY);
+    if (range && (range.startContainer === span.firstChild || range.startContainer === span)) {
+      return { node: range.startContainer, offset: range.startOffset, span };
+    }
+  } else {
+    // Fallback to simpler midpoint check
+    const r = span.getBoundingClientRect();
+    const isAtEnd = clientX > (r.left + r.width / 2);
+    return selectionNode(span, isAtEnd);
+  }
+}
+
+// const selectionNode = (span: HTMLElement, atEnd: boolean) => {
+//   if (!span.firstChild)
+//     return { node: span, offset: 0, span}
+//   else return selectionNode(span, atEnd);
+// };
 
 
 const getClosestTextNodeOfSpans = (clientX: number, clientY: number, spans: HTMLElement[], direction: number, start: boolean) => {
@@ -67,10 +88,10 @@ const getClosestTextNodeOfSpans = (clientX: number, clientY: number, spans: HTML
     return null;
   }
   console.log("getClosestTextNodeOfSpans, span=", span)
-  return getResult(span, clientY >= spanRect.bottom  // 鼠标在文字下方
+  return selectionNode(span, clientY >= spanRect.bottom  // 鼠标在文字下方
     || (clientX >= spanRect.right && !(start && !!(direction & DOWN))) // 如果刚开始选择且鼠标在文字右侧开始往下滑动则从文本头开始选择
   );
-  // return getResult(span, clientX >= spanRect.right || clientY >= spanRect.bottom);
+  // return selectionNode(span, clientX >= spanRect.right || clientY >= spanRect.bottom);
 }
 
 
@@ -92,10 +113,10 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
     const lastRect = lastSpan.getBoundingClientRect();
     if (clientX < firstRect.left) {
       console.log("=====left margin", firstSpan);
-      return getResult(firstSpan, false);
+      return selectionNode(firstSpan, false);
     } else if (clientX > lastRect.right) {
       console.log("=====right margin", lastSpan);
-      return getResult(lastSpan, true);
+      return selectionNode(lastSpan, true);
     } else {
       // Inside the row (between words or columns)
       for (let i = 0; i < rowSpans.length; i++) {
@@ -103,23 +124,7 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
         const r = span.getBoundingClientRect();
         // Hovering this span
         if (clientX >= r.left && clientX <= r.right) {
-          // Try high-precision selection if native API supports it
-          const doc = document as any;
-          if (doc.caretPositionFromPoint) {
-            const pos = doc.caretPositionFromPoint(clientX, clientY);
-            if (pos && (pos.offsetNode === span.firstChild || pos.offsetNode === span)) {
-              return { node: pos.offsetNode, offset: pos.offset, span };
-            }
-          } else if (doc.caretRangeFromPoint) {
-            const range = doc.caretRangeFromPoint(clientX, clientY);
-            if (range && (range.startContainer === span.firstChild || range.startContainer === span)) {
-              return { node: range.startContainer, offset: range.startOffset, span };
-            }
-          } else {
-            // Fallback to simpler midpoint check
-            const isAtEnd = clientX > (r.left + r.width / 2);
-            return getResult(span, isAtEnd);
-          }
+          highPrecisionSelectionNode(span, clientX, clientY);
         }
 
         if (i < rowSpans.length - 1) {
@@ -131,10 +136,10 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
             const distRight = nextR.left - clientX;
             if (distLeft <= distRight) {
               console.log("=====gutter left", span);
-              return getSafeResult(span, true);
+              return selectionNode(span, true);
             } else {
               console.log("=====gutter right", nextSpan);
-              return getSafeResult(nextSpan, false);
+              return selectionNode(nextSpan, false);
             }
           }
         }
@@ -186,6 +191,13 @@ const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, l
 
 };
 
+const getSelectNodeAt = (clientX: number, clientY: number) => {
+  const span = document.elementFromPoint(clientX, clientY) as HTMLElement;
+  if(span.textContent){
+    return highPrecisionSelectionNode(span, clientX, clientY);
+  }
+  return null;
+}
 
 /**
  * Expands selection to the word boundaries at the given node/offset.
@@ -253,7 +265,7 @@ const selectWordAtNode = (node: Node, offset: number) => {
  * Helper: Find closest text node with Strict Row Priority.
  * Prevents selecting adjacent lines when in margins.
  */
-const getSelectNodeBy1 = (clientX: number, clientY: number, layer: HTMLElement) => (start: boolean = false, direction: number, layoutBlocks: DOMRect[]) => {
+const getSelectNodeBy1 = (clientX: number, clientY: number, layer: HTMLElement, layoutBlocks: DOMRect[], direction: number, start: boolean = false)  => {
   const spans = Array.from(layer.children) as HTMLElement[];
   if (spans.length === 0) return null;
 
@@ -293,12 +305,12 @@ const getSelectNodeBy1 = (clientX: number, clientY: number, layer: HTMLElement) 
       if (layoutBlocks.length > 0 && clientX < layoutBlocks[0].left && firstRect.left < layoutBlocks[0].right) {
         console.log('=====left margin 1', firstSpan)
         // 沿着最左边选择，且firstSpan 不在第二栏
-        return getResult(firstSpan, false);
+        return selectionNode(firstSpan, false);
       }
       // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
       if (DOMRectUtils.contains(mouseBlock, firstRect)) {
         console.log('=====left margin 2', firstSpan)
-        return getResult(firstSpan, false);
+        return selectionNode(firstSpan, false);
       }
     }
 
@@ -312,11 +324,11 @@ const getSelectNodeBy1 = (clientX: number, clientY: number, layer: HTMLElement) 
       if (layoutBlocks.length > 0 && clientX > layoutBlocks[layoutBlocks.length - 1].right && lastRect.right > layoutBlocks[layoutBlocks.length - 1].left) {
         console.log('=====left margin 1', firstSpan)
         // 沿着右边选择，且firstSpan 不在第一栏
-        return getResult(lastSpan, true);
+        return selectionNode(lastSpan, true);
       }
       // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
       if (DOMRectUtils.contains(mouseBlock, lastRect)) {
-        return getResult(lastSpan, true);
+        return selectionNode(lastSpan, true);
       }
       // if (direction & RIGHT) {
       //   console.log('=====right margin ')
@@ -347,7 +359,7 @@ const getSelectNodeBy1 = (clientX: number, clientY: number, layer: HTMLElement) 
 
           // Fallback to simpler midpoint check
           const isAtEnd = clientX > (r.left + r.width / 2);
-          return getResult(span, isAtEnd);
+          return selectionNode(span, isAtEnd);
         }
 
         // Gutter between this and next
@@ -363,20 +375,20 @@ const getSelectNodeBy1 = (clientX: number, clientY: number, layer: HTMLElement) 
                 // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
                 if (DOMRectUtils.contains(mouseBlock, nextR)) {
                   console.log("=====gutter selRect right 1", nextSpan);
-                  return getResult(nextSpan, false);
+                  return selectionNode(nextSpan, false);
                 } else {
                   console.log("=====gutter selRect left 1", span);
-                  return getResult(span, true);
+                  return selectionNode(span, true);
                 }
               } else if (clientX > r.right && clientX < selRect.left) {
                 // 如果已经有选区了，那么除非鼠标明显进入选区外的block，优先选择选区所在的block的文字
                 // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
                 if (DOMRectUtils.contains(mouseBlock, r)) {
                   console.log("=====gutter selRect left 2", nextSpan);
-                  return getResult(span, true);
+                  return selectionNode(span, true);
                 } else {
                   console.log("=====gutter selRect right 2", span);
-                  return getResult(nextSpan, false);
+                  return selectionNode(nextSpan, false);
                 }
               }
             }
@@ -391,10 +403,10 @@ const getSelectNodeBy1 = (clientX: number, clientY: number, layer: HTMLElement) 
               const distRight = nextR.left - clientX;
               if (distLeft <= distRight) {
                 console.log("=====gutter left", span);
-                return getSafeResult(span, true);
+                return selectionNode(span, true);
               } else {
                 console.log("=====gutter right", nextSpan);
-                return getSafeResult(nextSpan, false);
+                return selectionNode(nextSpan, false);
               }
             } else {
               const distLeft = clientX - leftLayoutBlock.right;
@@ -402,10 +414,10 @@ const getSelectNodeBy1 = (clientX: number, clientY: number, layer: HTMLElement) 
               if (distLeft <= distRight) {
                 console.log("=====gutter left layout block", span);
                 // 如果刚开始选择且鼠标在文字右侧开始往下滑动则从文本头开始选择，其他的情况都从文本尾开始选择
-                return getSafeResult(span, !(start && !!(direction & DOWN)));
+                return selectionNode(span, !(start && !!(direction & DOWN)));
               } else {
                 console.log("=====gutter right layout block", nextSpan);
-                return getSafeResult(nextSpan, false);
+                return selectionNode(nextSpan, false);
               }
             }
           }
@@ -443,7 +455,7 @@ const getSelectNodeBy1 = (clientX: number, clientY: number, layer: HTMLElement) 
   if (span) {
     const r = span.getBoundingClientRect();
     console.log("findStartClosestNode fallback, span=", span, clientX >= r.right || clientY >= r.bottom, clientX, r.right, clientY, r.bottom)
-    return getResult(span, clientX >= r.right || clientY >= r.bottom);
+    return selectionNode(span, clientX >= r.right || clientY >= r.bottom);
   } else {
     console.log("findStartClosestNode fallback, span=null")
     return null;
@@ -454,6 +466,7 @@ const getSelectNodeBy1 = (clientX: number, clientY: number, layer: HTMLElement) 
 export {
   computeLayoutBlocks,
   getSelectNodeBy,
-  selectWordAtNode
+  selectWordAtNode,
+  getSelectNodeAt
 } 
 

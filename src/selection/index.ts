@@ -2,7 +2,9 @@
 export {
   computeLayoutBlocks,
   getSelectNodeBy,
-  selectWordAtNode
+  getSelectNodeAt,
+  selectWordAtNode,
+  
 } from './selection'
 
 export {default as DOMRectUtils} from './DOMRectUtils';

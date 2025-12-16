@@ -6,7 +6,13 @@ import { PDFDocumentProxy,
   RIGHT } from '../types';
 import { extractTextFromPage, pdfjs } from '../services/pdfService';
 import { CloudSnow, Loader2 as Loader2Icon } from 'lucide-react';
-import {computeLayoutBlocks, getSelectNodeBy, selectWordAtNode, DOMRectUtils} from '../selection';
+import {
+  computeLayoutBlocks, 
+  getSelectNodeBy, 
+  selectWordAtNode, 
+  DOMRectUtils, 
+  getSelectNodeAt
+} from '@/selection';
 interface PDFViewerProps {
   pdfDocument: PDFDocumentProxy | null;
   currentPage: number;
@@ -349,7 +355,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
     // Ignore non-left clicks (e.g. Right Click for Context Menu) to preserve selection
     if (e.button !== 0) return;
 // console.log("=====", e.target)
-    const textLayer = textLayerRef.current;
+    let textLayer = textLayerRef.current;
     if (!textLayer) return;
     
     // FORCE custom selection logic everywhere
@@ -359,12 +365,9 @@ setLayoutBlocks(blocks);
     const MIND = 3;
     console.log("handleMouseDown==", e.clientX, e.clientY)
     // let superpositionState_getSelectNodeBy = getSelectNodeBy(e.clientX, e.clientY, textLayer);
-    const startX = e.clientX, startY = e.clientY;
+    let startX = e.clientX, startY = e.clientY;
 
     const handleDragSelection = () => {
-      // let startX = e.clientX, startY = e.clientY;
-      // const textLayer = textLayerRef.current;
-      // let superpositionState_getSelectNodeBy = findStartClosestNode(startX, startY, textLayer);
       let isDragging = false;
       const handleMouseMove = (ev: MouseEvent) => {
         if (!isDragging) {
@@ -380,7 +383,8 @@ setLayoutBlocks(blocks);
           if(dx <= -MIND) direction |= LEFT;
           if(dy >= MIND) direction |= DOWN;
           if(dy <= -MIND) direction |= UP;
-          let result = getSelectNodeBy(e.clientX, e.clientY, textLayer, blocks, direction, true);
+          // Lazy Selection: 这里是startX, startY，不是 ev.clientX, ev.clientY。
+          let result = getSelectNodeBy(startX, startY, textLayer, blocks, direction, true);
           if(result && result.node){
    // console.log("=====set start", result.node)
             const range = document.createRange();
@@ -388,10 +392,11 @@ setLayoutBlocks(blocks);
             range.collapse(true);
             window.getSelection().addRange(range);
           } 
-          // else {
-          //   console.log("next getSelectNodeBy")
-          //   superpositionState_getSelectNodeBy = getSelectNodeBy(ev.clientX, ev.clientY, textLayer);
-          // }
+          else {
+            console.log("next getSelectNodeBy")
+            startX = ev.clientX, startY = ev.clientY;
+            // superpositionState_getSelectNodeBy = getSelectNodeBy(ev.clientX, ev.clientY, textLayer);
+          }
           return;
         }
         
@@ -405,6 +410,7 @@ setLayoutBlocks(blocks);
         if(layer !== textLayer) {
           blocks = computeLayoutBlocks(layer);
           setLayoutBlocks(blocks);
+          textLayer = layer;
         }
 
         if (layer) {
@@ -429,16 +435,15 @@ setLayoutBlocks(blocks);
       window.addEventListener('mouseup', handleMouseUp);
     }
 
-    
-
     if (e.detail === 2) {
-      const result = getSelectNodeBy(startX, startY, textLayer, blocks, 0,  true);
+      window.getSelection().removeAllRanges();
+      const result = getSelectNodeAt(startX, startY);
       if (result && result.node) {
         selectWordAtNode(result.node, result.offset);
         // Attach drag listener to allow extending from the word selection
         handleDragSelection();
-        return;
       }
+      // return;
     }
     // SHIFT CLICK LOGIC: Extend existing selection
     else if (e.shiftKey && window.getSelection() && window.getSelection().rangeCount > 0) {
