@@ -42,4 +42,13 @@ export enum ChatState {
   ERROR = 'ERROR'
 }
 
+const UP = 1, DOWN = 1 << 1, LEFT = 1 << 2, RIGHT = 1 << 3;
+
+export {
+  UP,
+  DOWN,
+  LEFT,
+  RIGHT
+}
+
  

@@ -3,7 +3,7 @@ export default class DOMRectUtils {
    * Returns a new DOMRect that is the union of two DOMRect objects.
    * The resulting DOMRect encompasses both input rectangles.
    */
-  static union(rect1: DOMRect, rect2: DOMRect): DOMRect {
+  static union(rect1: DOMRect | null, rect2: DOMRect | null): DOMRect {
     if (rect1 === null) return rect2;
     if (rect2 === null) return rect1;
     const x = Math.min(rect1.x, rect2.x);
@@ -17,7 +17,8 @@ export default class DOMRectUtils {
   /**
    * Checks if two DOMRect objects intersect.
    */
-  static isIntersect(rect1: DOMRect, rect2: DOMRect): boolean {
+  static isIntersect(rect1: DOMRect| null, rect2: DOMRect| null): boolean {
+    if(rect1 === null || rect2 === null) return false;
     return (
       rect1.left < rect2.right &&
       rect1.right > rect2.left &&
@@ -29,7 +30,7 @@ export default class DOMRectUtils {
   /**
    * Checks if the first DOMRect completely contains the second DOMRect.
    */
-  static isContains(outer: DOMRect, inner: DOMRect): boolean {
+  static isContains(outer: DOMRect | null, inner: DOMRect | null): boolean {
     if (outer === null || inner === null) return false;
     return (
       outer.left <= inner.left &&
@@ -51,10 +52,14 @@ export default class DOMRectUtils {
     );
   }
 
+  static toString(rect: DOMRect | null): string {
+    if (rect === null) return 'null';
+    return `{${rect.x}, ${rect.y}, ${rect.width}, ${rect.height}}`;
+  }
   /**
    * Generates a hash code for a DOMRect.
    */
-  static hashCode(rect: DOMRect): string {
+  static hashCode(rect: DOMRect | null): string {
     if (rect === null) return 'null';
     return `${rect.x},${rect.y},${rect.width},${rect.height}`;
   }
