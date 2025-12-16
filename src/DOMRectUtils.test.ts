@@ -97,4 +97,49 @@ describe('DOMRectUtils', () => {
     expect(DOMRectUtils.hashCode(rect1)).not.toBe(DOMRectUtils.hashCode(rect3));
     expect(DOMRectUtils.hashCode(null as any)).toBe('null');
   });
+
+  it('should calculate the intersection of two overlapping rectangles', () => {
+    const rect1 = new DOMRect(0, 0, 100, 100);
+    const rect2 = new DOMRect(50, 50, 100, 100);
+
+    // Intersection should be from (50, 50) to (100, 100)
+    // x: 50, y: 50
+    // width: 100 - 50 = 50
+    // height: 100 - 50 = 50
+
+    const intersect = DOMRectUtils.intersect(rect1, rect2);
+    expect(intersect).not.toBeNull();
+    if (intersect) {
+      expect(intersect.x).toBe(50);
+      expect(intersect.y).toBe(50);
+      expect(intersect.width).toBe(50);
+      expect(intersect.height).toBe(50);
+    }
+  });
+
+  it('should return null for non-intersecting rectangles', () => {
+    const rect1 = new DOMRect(0, 0, 10, 10);
+    const rect2 = new DOMRect(20, 20, 10, 10);
+    expect(DOMRectUtils.intersect(rect1, rect2)).toBeNull();
+  });
+
+  it('should return null if any input is null', () => {
+    const rect1 = new DOMRect(0, 0, 10, 10);
+    expect(DOMRectUtils.intersect(rect1, null)).toBeNull();
+    expect(DOMRectUtils.intersect(null, rect1)).toBeNull();
+  });
+
+  it('should return the inner rectangle if one is inside another', () => {
+    const outer = new DOMRect(0, 0, 100, 100);
+    const inner = new DOMRect(25, 25, 50, 50);
+
+    const intersect = DOMRectUtils.intersect(outer, inner);
+    expect(intersect).not.toBeNull();
+    if (intersect) {
+      expect(intersect.x).toBe(25);
+      expect(intersect.y).toBe(25);
+      expect(intersect.width).toBe(50);
+      expect(intersect.height).toBe(50);
+    }
+  });
 });

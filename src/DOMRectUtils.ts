@@ -17,8 +17,8 @@ export default class DOMRectUtils {
   /**
    * Checks if two DOMRect objects intersect.
    */
-  static isIntersect(rect1: DOMRect| null, rect2: DOMRect| null): boolean {
-    if(rect1 === null || rect2 === null) return false;
+  static isIntersect(rect1: DOMRect | null, rect2: DOMRect | null): boolean {
+    if (rect1 === null || rect2 === null) return false;
     return (
       rect1.left < rect2.right &&
       rect1.right > rect2.left &&
@@ -28,9 +28,25 @@ export default class DOMRectUtils {
   }
 
   /**
+   * Returns the intersection of two DOMRect objects.
+   * Returns null if they do not intersect.
+   */
+  static intersect(rect1: DOMRect | null, rect2: DOMRect | null): DOMRect | null {
+    if (rect1 === null || rect2 === null) return null;
+    if (!DOMRectUtils.isIntersect(rect1, rect2)) return null;
+
+    const x = Math.max(rect1.x, rect2.x);
+    const y = Math.max(rect1.y, rect2.y);
+    const right = Math.min(rect1.right, rect2.right);
+    const bottom = Math.min(rect1.bottom, rect2.bottom);
+
+    return new DOMRect(x, y, right - x, bottom - y);
+  }
+
+  /**
    * Checks if the first DOMRect completely contains the second DOMRect.
    */
-  static isContains(outer: DOMRect | null, inner: DOMRect | null): boolean {
+  static contains(outer: DOMRect | null, inner: DOMRect | null): boolean {
     if (outer === null || inner === null) return false;
     return (
       outer.left <= inner.left &&
@@ -40,7 +56,7 @@ export default class DOMRectUtils {
     );
   }
 
-  static isContainsCoord(outer: DOMRect, clientX: number, clientY: number): boolean {
+  static containsCoord(outer: DOMRect, clientX: number, clientY: number): boolean {
     if (outer === null) {
       return false;
     }
