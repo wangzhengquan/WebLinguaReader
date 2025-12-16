@@ -151,7 +151,21 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
   }
 }
 
+const getSelectNodeAt = (clientX: number, clientY: number) => {
+  const span = document.elementFromPoint(clientX, clientY) as HTMLElement;
+  if(span.tagName === "SPAN" && span.textContent){
+    return highPrecisionSelectionNode(span, clientX, clientY);
+  }
+  return null;
+}
+
 const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, layoutBlocks: DOMRect[], direction: number, start: boolean ) => {
+  const result = getSelectNodeAt(clientX, clientY)
+  if(result && result.node) {
+    console.log("getSelectNodeBy from getSelectNodeAt", result.span);
+    return result;
+  }
+
   let spans = Array.from(layer.children) as HTMLElement[];
   spans = spans.filter(s => s.tagName === "SPAN")
   if (spans.length === 0) return null;
@@ -191,13 +205,7 @@ const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, l
 
 };
 
-const getSelectNodeAt = (clientX: number, clientY: number) => {
-  const span = document.elementFromPoint(clientX, clientY) as HTMLElement;
-  if(span.textContent){
-    return highPrecisionSelectionNode(span, clientX, clientY);
-  }
-  return null;
-}
+
 
 /**
  * Expands selection to the word boundaries at the given node/offset.

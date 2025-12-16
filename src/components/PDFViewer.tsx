@@ -38,8 +38,8 @@ interface PDFPageProps {
 const getRelativeRect = (rect: DOMRect, layer: HTMLElement) => {
   const layerRect = layer.getBoundingClientRect();
   return {
-      top: rect.top - layerRect.top,
-      left: rect.left - layerRect.left,
+      top: rect.top - layerRect.top - layer.clientTop,
+      left: rect.left - layerRect.left - layer.clientLeft,
       width: rect.width,
       height: rect.height
   };
@@ -65,7 +65,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   
   // Unified rendering state
-  const [shouldRender, setShouldRender] = useState(forcePreload);
+  const [shouldRender, setShouldRender] = useState(isActivePage || forcePreload);
   
   // Initialize with null to indicate "loading dimensions"
   const [dimensions, setDimensions] = useState<{width: number, height: number} | null>(null);
@@ -238,6 +238,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
   // 5. Main Rendering Logic (Paint Phase)
   useEffect(() => {
+    console.log(`Rendering page ${pageNumber} at scale ${scale}, shouldRender=${shouldRender}, dimensions=${dimensions}`);
     if (!shouldRender || !dimensions) return; 
 
     if (Math.abs(renderedScale - scale) < 0.01 && !isLoading && renderedScale !== 0) return;
@@ -502,7 +503,7 @@ setLayoutBlocks(blocks);
                     );
                 })}
 
-                {layoutBlocks.map((rect, i) => {
+                {isActivePage && layoutBlocks.map((rect, i) => {
                   // console.log("=======rect===", ""+rect);
                   // const rel  = rect;
                   // console.log("===textLayerRef.current", textLayerRef.current)
