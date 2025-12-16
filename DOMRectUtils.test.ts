@@ -87,4 +87,14 @@ describe('DOMRectUtils', () => {
     const rect = new DOMRect(0, 0, 100, 100);
     expect(DOMRectUtils.contains(rect, rect)).toBe(true);
   });
+
+  it('should generate consistent hash codes', () => {
+    const rect1 = new DOMRect(10, 20, 30, 40);
+    const rect2 = new DOMRect(10, 20, 30, 40);
+    const rect3 = new DOMRect(11, 20, 30, 40);
+
+    expect(DOMRectUtils.hashCode(rect1)).toBe(DOMRectUtils.hashCode(rect2));
+    expect(DOMRectUtils.hashCode(rect1)).not.toBe(DOMRectUtils.hashCode(rect3));
+    expect(DOMRectUtils.hashCode(null as any)).toBe('null');
+  });
 });

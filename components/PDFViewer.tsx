@@ -874,7 +874,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
                   const rel = getRelativeRect(rect, textLayerRef.current);
                   return (
                       <div 
-                          key={rect}
+                          key={DOMRectUtils.hashCode(rect)}
                           className="absolute pointer-events-none z-10 mix-blend-multiply"
                           style={{
                               top: rel.top,

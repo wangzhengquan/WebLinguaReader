@@ -4,8 +4,8 @@ export default class DOMRectUtils {
    * The resulting DOMRect encompasses both input rectangles.
    */
   static union(rect1: DOMRect, rect2: DOMRect): DOMRect {
-    if(rect1 === null) return rect2;
-    if(rect2 === null) return rect1;
+    if (rect1 === null) return rect2;
+    if (rect2 === null) return rect1;
     const x = Math.min(rect1.x, rect2.x);
     const y = Math.min(rect1.y, rect2.y);
     const right = Math.max(rect1.right, rect2.right);
@@ -30,7 +30,7 @@ export default class DOMRectUtils {
    * Checks if the first DOMRect completely contains the second DOMRect.
    */
   static isContains(outer: DOMRect, inner: DOMRect): boolean {
-    if(outer === null || inner === null) return false;
+    if (outer === null || inner === null) return false;
     return (
       outer.left <= inner.left &&
       outer.right >= inner.right &&
@@ -40,14 +40,22 @@ export default class DOMRectUtils {
   }
 
   static isContainsCoord(outer: DOMRect, clientX: number, clientY: number): boolean {
-    if(outer === null) {
+    if (outer === null) {
       return false;
-    } 
+    }
     return (
       outer.left <= clientX &&
       outer.right >= clientX &&
       outer.top <= clientY &&
       outer.bottom >= clientY
     );
+  }
+
+  /**
+   * Generates a hash code for a DOMRect.
+   */
+  static hashCode(rect: DOMRect): string {
+    if (rect === null) return 'null';
+    return `${rect.x},${rect.y},${rect.width},${rect.height}`;
   }
 }
