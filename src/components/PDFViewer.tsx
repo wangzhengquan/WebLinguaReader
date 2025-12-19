@@ -366,7 +366,7 @@ setLayoutBlocks(blocks);
     const MIND = 3;
     console.log("handleMouseDown==", e.clientX, e.clientY)
     // let superpositionState_getSelectNodeBy = getSelectNodeBy(e.clientX, e.clientY, textLayer);
-    let startX = e.clientX, startY = e.clientY;
+    const startX = e.clientX, startY = e.clientY;
 
     const handleDragSelection = () => {
       let isDragging = false;
@@ -393,11 +393,11 @@ setLayoutBlocks(blocks);
             range.collapse(true);
             window.getSelection().addRange(range);
           } 
-          else {
-            console.log("next getSelectNodeBy")
-            startX = ev.clientX, startY = ev.clientY;
-            // superpositionState_getSelectNodeBy = getSelectNodeBy(ev.clientX, ev.clientY, textLayer);
-          }
+          // else {
+          //   console.log("next getSelectNodeBy")
+          //   startX = ev.clientX, startY = ev.clientY;
+          //   // superpositionState_getSelectNodeBy = getSelectNodeBy(ev.clientX, ev.clientY, textLayer);
+          // }
           return;
         }
         
@@ -421,7 +421,7 @@ setLayoutBlocks(blocks);
           if(dx < 0) direction |= LEFT;
           if(dy > 0) direction |= DOWN;
           if(dy < 0) direction |= UP;
-          startX = ev.clientX, startY = ev.clientY;
+          // startX = ev.clientX, startY = ev.clientY;
           const result = getSelectNodeBy(ev.clientX, ev.clientY, layer, blocks, direction,  false);
           if (result && result.node) {
             if (window.getSelection().rangeCount > 0) window.getSelection().extend(result.node, result.offset);
@@ -460,7 +460,7 @@ setLayoutBlocks(blocks);
       if(dx < 0) direction |= LEFT;
       if(dy > 0) direction |= DOWN;
       if(dy < 0) direction |= UP;
-      startX = e.clientX, startY = e.clientY;
+      // startX = e.clientX, startY = e.clientY;
       const result =  getSelectNodeBy(e.clientX, e.clientY, textLayer, blocks, direction, true);
       console.log("=====shift click extend selection", result)
       if(result && result.node) {

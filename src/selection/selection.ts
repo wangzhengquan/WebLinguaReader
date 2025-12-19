@@ -88,9 +88,11 @@ const getClosestTextNodeOfSpans = (clientX: number, clientY: number, spans: HTML
     return null;
   }
   console.log("getClosestTextNodeOfSpans, span=", span)
-  return selectionNode(span, clientY >= spanRect.bottom  // 鼠标在文字下方
-    || (clientX >= spanRect.right && !(start && !!(direction & DOWN))) // 如果刚开始选择且鼠标在文字右侧开始往下滑动则从文本头开始选择
-  );
+  const atEnd = clientY >= spanRect.bottom  
+    || (!start && !!(direction & DOWN)) 
+    || (start && !!(direction & UP));
+  return selectionNode(span, atEnd) // 如果刚开始选择且鼠标在文字右侧开始往下滑动则从文本头开始选择
+  
   // return selectionNode(span, clientX >= spanRect.right || clientY >= spanRect.bottom);
 }
 
@@ -111,12 +113,14 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
     const lastSpan = rowSpans[rowSpans.length - 1];
     const firstRect = firstSpan.getBoundingClientRect();
     const lastRect = lastSpan.getBoundingClientRect();
+    const atEnd = (!start && !!(direction & DOWN)) || (start && !!(direction & UP));
     if (clientX < firstRect.left) {
-      console.log("=====left margin", firstSpan);
-      return selectionNode(firstSpan, !start);
+      
+      console.log("=====left margin", firstSpan, atEnd, start, direction.toString(2));
+      return selectionNode(firstSpan, atEnd);
     } else if (clientX > lastRect.right) {
-      console.log("=====right margin", lastSpan);
-      return selectionNode(lastSpan, !start);
+      console.log("=====right margin", lastSpan, atEnd);
+      return selectionNode(lastSpan, atEnd);
     } else {
       // Inside the row (between words or columns)
       for (let i = 0; i < rowSpans.length; i++) {
@@ -190,7 +194,7 @@ const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, l
       const r = s.getBoundingClientRect();
       return DOMRectUtils.contains(selBlock, r);
     });
-    console.log("=====getSelectNodeBy in selBlock ", selBlockSpans, DOMRectUtils.equals(selBlock, selRect));
+    console.log("=====getSelectNodeBy in selBlock ", selBlockSpans.length, DOMRectUtils.equals(selBlock, selRect));
     // if (!DOMRectUtils.equals(selBlock, selRect)){
     //   // 如果selBlock和selRect是同一块区域就没必要再选择了，会跳出这一段在全部spans中选择。 但是如果是撤销选择呢？
     //   const result = getSelectNodeOfSpans(clientX, clientY, selBlockSpans, direction, start);
