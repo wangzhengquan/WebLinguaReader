@@ -52,11 +52,11 @@ const highPrecisionSelectionNode = (span: HTMLElement, clientX: number, clientY:
 // };
 
 
-const getClosestTextNodeOfSpans = (clientX: number, clientY: number, spans: HTMLElement[], direction: number, start: boolean) => {
+const getClosestTextNodeOfSpans = (clientX: number, clientY: number, spans: HTMLElement[], direction: number, start: boolean, weightX: number) => {
   if (!spans || spans.length === 0) return null;
   const distance = (r: DOMRect) => {
     // x 权重小
-    const dx = Math.min(Math.abs(r.left - clientX), Math.abs(r.right - clientX)) * .2;
+    const dx = Math.min(Math.abs(r.left - clientX), Math.abs(r.right - clientX)) * weightX;
     // const dy = r.top + r.height / 2 - clientY ;
     const dy = Math.min(Math.abs(r.top + r.height / 2 - clientY), Math.abs(r.bottom - r.height / 2 - clientY))
     const dist = dx * dx + dy * dy;
@@ -95,7 +95,7 @@ const getClosestTextNodeOfSpans = (clientX: number, clientY: number, spans: HTML
 }
 
 
-const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLElement[], direction: number, start: boolean) => {
+const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLElement[], direction: number, start: boolean, weightX: number) => {
   // Strict vertical check: Cursor MUST be between top and bottom of the span
   if (!spans || spans.length === 0) return null;
   const rowSpans = spans.filter(s => {
@@ -113,10 +113,10 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
     const lastRect = lastSpan.getBoundingClientRect();
     if (clientX < firstRect.left) {
       console.log("=====left margin", firstSpan);
-      return selectionNode(firstSpan, false);
+      return selectionNode(firstSpan, !start);
     } else if (clientX > lastRect.right) {
       console.log("=====right margin", lastSpan);
-      return selectionNode(lastSpan, true);
+      return selectionNode(lastSpan, !start);
     } else {
       // Inside the row (between words or columns)
       for (let i = 0; i < rowSpans.length; i++) {
@@ -147,7 +147,7 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
     }
   } else {
     console.log("getSelectNodeOfSpans fallback")
-    return getClosestTextNodeOfSpans(clientX, clientY, spans, direction, start);
+    return getClosestTextNodeOfSpans(clientX, clientY, spans, direction, start, weightX);
   }
 }
 
@@ -180,7 +180,7 @@ const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, l
       const r = s.getBoundingClientRect();
       return DOMRectUtils.contains(mouseBlock, r);
     });
-    const result = getSelectNodeOfSpans(clientX, clientY, mouseBlockSpans, direction, start);
+    const result = getSelectNodeOfSpans(clientX, clientY, mouseBlockSpans, direction, start, 0);
     if (result && result.node) return result;
   }
 
@@ -196,12 +196,12 @@ const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, l
     //   const result = getSelectNodeOfSpans(clientX, clientY, selBlockSpans, direction, start);
     //   if (result && result.node ) return result;
     // }
-    const result = getSelectNodeOfSpans(clientX, clientY, selBlockSpans, direction, start);
+    const result = getSelectNodeOfSpans(clientX, clientY, selBlockSpans, direction, start, 0);
     if (result && result.node ) return result;
   }
 
   console.log("getSelectNodeBy in all spans");
-  return getClosestTextNodeOfSpans(clientX, clientY, spans, direction, start);
+  return getClosestTextNodeOfSpans(clientX, clientY, spans, direction, start, 0.2);
 
 };
 

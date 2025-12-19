@@ -380,10 +380,10 @@ setLayoutBlocks(blocks);
         if(window.getSelection().rangeCount === 0) {
           let direction = 0;
           const dx = ev.clientX - startX, dy = ev.clientY - startY;
-          if(dx >= MIND) direction |= RIGHT;
-          if(dx <= -MIND) direction |= LEFT;
-          if(dy >= MIND) direction |= DOWN;
-          if(dy <= -MIND) direction |= UP;
+          if(dx > 0) direction |= RIGHT;
+          if(dx < 0) direction |= LEFT;
+          if(dy > 0) direction |= DOWN;
+          if(dy < 0) direction |= UP;
           // Lazy Selection: 这里是startX, startY，不是 ev.clientX, ev.clientY。
           let result = getSelectNodeBy(startX, startY, textLayer, blocks, direction, true);
           if(result && result.node){
@@ -415,10 +415,17 @@ setLayoutBlocks(blocks);
         }
 
         if (layer) {
-            const result = getSelectNodeBy(ev.clientX, ev.clientY, layer, blocks, 0,  false);
-            if (result && result.node) {
-              if (window.getSelection().rangeCount > 0) window.getSelection().extend(result.node, result.offset);
-            }
+          let direction = 0;
+          const dx = ev.clientX - startX, dy = ev.clientY - startY;
+          if(dx > 0) direction |= RIGHT;
+          if(dx < 0) direction |= LEFT;
+          if(dy > 0) direction |= DOWN;
+          if(dy < 0) direction |= UP;
+          startX = ev.clientX, startY = ev.clientY;
+          const result = getSelectNodeBy(ev.clientX, ev.clientY, layer, blocks, direction,  false);
+          if (result && result.node) {
+            if (window.getSelection().rangeCount > 0) window.getSelection().extend(result.node, result.offset);
+          }
         }
       };
   
@@ -447,7 +454,14 @@ setLayoutBlocks(blocks);
     }
     // SHIFT CLICK LOGIC: Extend existing selection
     else if (e.shiftKey && window.getSelection() && window.getSelection().rangeCount > 0) {
-      const result =  getSelectNodeBy(e.clientX, e.clientY, textLayer, blocks, 0, true);
+      let direction = 0;
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      if(dx > 0) direction |= RIGHT;
+      if(dx < 0) direction |= LEFT;
+      if(dy > 0) direction |= DOWN;
+      if(dy < 0) direction |= UP;
+      startX = e.clientX, startY = e.clientY;
+      const result =  getSelectNodeBy(e.clientX, e.clientY, textLayer, blocks, direction, true);
       console.log("=====shift click extend selection", result)
       if(result && result.node) {
         try {
