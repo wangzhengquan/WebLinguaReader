@@ -35,6 +35,7 @@ interface PDFPageProps {
 
 
 const getRelativeRect = (rect: DOMRect, layer: HTMLElement) => {
+  if(layer === null) return rect;
   const layerRect = layer.getBoundingClientRect();
   return {
       top: rect.top - layerRect.top - layer.clientTop,
@@ -81,7 +82,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
   const renderTaskRef = useRef<any>(null);
   const [highlights, setHighlights] = useState<DOMRect[]>([]);
   const [layoutBlocks, setLayoutBlocks] = useState<DOMRect[]>([]);
-  const [selectionRect, setSelectionRect] = useState<DOMRect[]>([]);
+  const [selectionRect, setSelectionRect] = useState<DOMRect>(null);
   
   const startPointRef = useRef<Point | null>(null);
 
@@ -375,12 +376,12 @@ const PDFPage: React.FC<PDFPageProps> = ({
     e.preventDefault(); 
 setLayoutBlocks(computeLayoutBlocks(textLayer));
     const MIND = 3;
-    console.log("handleMouseDown==", e.clientX, e.clientY)
+    // console.log("handleMouseDown==", e.clientX, e.clientY)
     // let superpositionState_getSelectNodeBy = getSelectNodeBy(e.clientX, e.clientY, textLayer);
     // let startX = 0 , startY = 0;
-    if(window.getSelection().rangeCount === 0) {
-      startPointRef.current = { x: e.clientX, y: e.clientY };
-    }
+    // if(window.getSelection().rangeCount === 0) {
+      
+    // }
 
     const handleDragSelection = () => {
       if(!startPointRef.current) return;
@@ -437,6 +438,7 @@ setLayoutBlocks(computeLayoutBlocks(layer));
       const handleMouseUp = () => {
           window.removeEventListener('mousemove', handleMouseMove);
           window.removeEventListener('mouseup', handleMouseUp);
+          console.log("Mouse up, remove listeners")
           if (!isDragging) {
               // If it was just a click without significant drag, clear the selection
               // window.getSelection()?.removeAllRanges();
@@ -465,7 +467,7 @@ setLayoutBlocks(computeLayoutBlocks(layer));
       if(result && result.node) {
         try {
           window.getSelection().extend(result.node, result.offset);
-          setSelectionRect(getSelectionRect());
+  setSelectionRect(getSelectionRect());
         } catch (err) {
           // Fallback to normal window.getSelection() if extend fails
           const range = document.createRange();
@@ -477,6 +479,9 @@ setLayoutBlocks(computeLayoutBlocks(layer));
       }
     } else {
       window.getSelection().removeAllRanges();
+      startPointRef.current = { x: e.clientX, y: e.clientY };
+      console.log("removeAllRanges on mousedown", window.getSelection().rangeCount);
+setSelectionRect(getSelectionRect());
       handleDragSelection();
     }
   }

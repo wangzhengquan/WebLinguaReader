@@ -18,7 +18,7 @@ const getSelectionRect = () => {
     }
   }
   const rect = DOMRectUtils.union(...rects);
-console.log("getSelectionRect:", rect);
+// console.log("getSelectionRect:", rect);
   return rect;
 }
 
@@ -108,12 +108,13 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
     const lastSpan = rowSpans[rowSpans.length - 1];
     const firstRect = firstSpan.getBoundingClientRect();
     const lastRect = lastSpan.getBoundingClientRect();
-    const atEnd = (!start && !!(direction & DOWN)) || (start && !!(direction & UP));
+    
     if (clientX < firstRect.left) {
-      
+      const atEnd = (!start && !(direction & (UP | LEFT) )) || (start && !!(direction & UP));
       console.log("=====left margin", firstSpan, atEnd, start, direction.toString(2));
       return selectionNode(firstSpan, atEnd);
     } else if (clientX > lastRect.right) {
+      const atEnd = (!start && !(direction & UP)) || (start && !!(direction & (UP | LEFT) ));
       console.log("=====right margin", lastSpan, atEnd, start, direction.toString(2));
       return selectionNode(lastSpan, atEnd);
     } else {
@@ -162,7 +163,7 @@ const getSelectNodeAt = (clientX: number, clientY: number) => {
 const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, direction: number, start: boolean ) => {
   const result = getSelectNodeAt(clientX, clientY)
   if(result && result.node) {
-    console.log("getSelectNodeAt", result.span);
+    console.log("getSelectNodeAt", result);
     return result;
   }
 
@@ -269,209 +270,7 @@ const selectWordAtNode = (node: Node, offset: number) => {
 };
 
 
-
-
-/**
- * Helper: Find closest text node with Strict Row Priority.
- * Prevents selecting adjacent lines when in margins.
- */
-const getSelectNodeBy1 = (clientX: number, clientY: number, layer: HTMLElement, layoutBlocks: DOMRect[], direction: number, start: boolean = false)  => {
-  const spans = Array.from(layer.children) as HTMLElement[];
-  if (spans.length === 0) return null;
-
-  const mouseBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks)
-  const selRect = getSelectionRect();
-  let selBlock = selRect ? intersectLayoutBlockOf(selRect, layoutBlocks) : null;
-  selBlock = DOMRectUtils.union(selBlock, selRect);
-  // 1. Identify "Visual Row"
-  // Strict vertical check: Cursor MUST be between top and bottom of the span
-  const rowSpans = spans.filter(s => {
-    const r = s.getBoundingClientRect();
-    // s.tagName==='SPAN' &&
-    return s.tagName === 'SPAN' && clientY >= r.top && clientY <= r.bottom;
-    // return  clientY >= r.top && clientY <= r.bottom;
-  });
-  // const layoutBlocks = computeLayoutBlocks(layer)
-  // If on a row (or horizontal margin of a row)
-  if (rowSpans.length > 0) {
-    // Sort by X position
-    rowSpans.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-
-    const firstSpan = rowSpans[0];
-    const lastSpan = rowSpans[rowSpans.length - 1];
-    const firstRect = firstSpan.getBoundingClientRect();
-    const lastRect = lastSpan.getBoundingClientRect();
-
-    // Left Margin -> Start of First Span
-    if (clientX < firstRect.left) {
-      // if (start){
-      //   console.log('=====left margin, return null')
-      //   return null;
-      // }
-      // const selRect = getSelectionRect();
-      // if(selRect) {
-      // }
-
-      if (layoutBlocks.length > 0 && clientX < layoutBlocks[0].left && firstRect.left < layoutBlocks[0].right) {
-        console.log('=====left margin 1', firstSpan)
-        // 沿着最左边选择，且firstSpan 不在第二栏
-        return selectionNode(firstSpan, false);
-      }
-      // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
-      if (DOMRectUtils.contains(mouseBlock, firstRect)) {
-        console.log('=====left margin 2', firstSpan)
-        return selectionNode(firstSpan, false);
-      }
-    }
-
-    // Right Margin -> End of Last Span
-    else if (clientX > lastRect.right) {
-
-      // const selRect = getSelectionRect();
-      // if (selRect && !DOMRectUtils.isIntersect(layoutBlockOf(lastRect, layoutBlocks), selRect) ) {
-      //   return null;
-      // } 
-      if (layoutBlocks.length > 0 && clientX > layoutBlocks[layoutBlocks.length - 1].right && lastRect.right > layoutBlocks[layoutBlocks.length - 1].left) {
-        console.log('=====left margin 1', firstSpan)
-        // 沿着右边选择，且firstSpan 不在第一栏
-        return selectionNode(lastSpan, true);
-      }
-      // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
-      if (DOMRectUtils.contains(mouseBlock, lastRect)) {
-        return selectionNode(lastSpan, true);
-      }
-      // if (direction & RIGHT) {
-      //   console.log('=====right margin ')
-      //   return null;
-      // }
-    }
-    else {
-      // Inside the row (between words or columns)
-      for (let i = 0; i < rowSpans.length; i++) {
-        const span = rowSpans[i];
-        const r = span.getBoundingClientRect();
-
-        // Hovering this span
-        if (clientX >= r.left && clientX <= r.right) {
-          // Try high-precision selection if native API supports it
-          const doc = document as any;
-          if (doc.caretPositionFromPoint) {
-            const pos = doc.caretPositionFromPoint(clientX, clientY);
-            if (pos && (pos.offsetNode === span.firstChild || pos.offsetNode === span)) {
-              return { node: pos.offsetNode, offset: pos.offset };
-            }
-          } else if (doc.caretRangeFromPoint) {
-            const range = doc.caretRangeFromPoint(clientX, clientY);
-            if (range && (range.startContainer === span.firstChild || range.startContainer === span)) {
-              return { node: range.startContainer, offset: range.startOffset };
-            }
-          }
-
-          // Fallback to simpler midpoint check
-          const isAtEnd = clientX > (r.left + r.width / 2);
-          return selectionNode(span, isAtEnd);
-        }
-
-        // Gutter between this and next
-        if (i < rowSpans.length - 1) {
-          const nextSpan = rowSpans[i + 1];
-          const nextR = nextSpan.getBoundingClientRect();
-
-          if (clientX > r.right && clientX < nextR.left) {
-
-            if (selRect) {
-              if (clientX > selRect.right && clientX < nextR.left) {
-                // 如果已经有选区了，那么除非鼠标明显进入选区外的block，优先选择选区所在的block的文字
-                // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
-                if (DOMRectUtils.contains(mouseBlock, nextR)) {
-                  console.log("=====gutter selRect right 1", nextSpan);
-                  return selectionNode(nextSpan, false);
-                } else {
-                  console.log("=====gutter selRect left 1", span);
-                  return selectionNode(span, true);
-                }
-              } else if (clientX > r.right && clientX < selRect.left) {
-                // 如果已经有选区了，那么除非鼠标明显进入选区外的block，优先选择选区所在的block的文字
-                // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
-                if (DOMRectUtils.contains(mouseBlock, r)) {
-                  console.log("=====gutter selRect left 2", nextSpan);
-                  return selectionNode(span, true);
-                } else {
-                  console.log("=====gutter selRect right 2", span);
-                  return selectionNode(nextSpan, false);
-                }
-              }
-            }
-
-            const leftLayoutBlock = layoutBlockOf(r, layoutBlocks);
-            const rightLayoutBlock = layoutBlockOf(nextR, layoutBlocks);
-            if (leftLayoutBlock === null || rightLayoutBlock === null) {
-              throw new Error("Layout block not found: " + leftLayoutBlock + rightLayoutBlock);
-            };
-            if (leftLayoutBlock === rightLayoutBlock) {
-              const distLeft = clientX - r.right;
-              const distRight = nextR.left - clientX;
-              if (distLeft <= distRight) {
-                console.log("=====gutter left", span);
-                return selectionNode(span, true);
-              } else {
-                console.log("=====gutter right", nextSpan);
-                return selectionNode(nextSpan, false);
-              }
-            } else {
-              const distLeft = clientX - leftLayoutBlock.right;
-              const distRight = rightLayoutBlock.left - clientX;
-              if (distLeft <= distRight) {
-                console.log("=====gutter left layout block", span);
-                // 如果刚开始选择且鼠标在文字右侧开始往下滑动则从文本头开始选择，其他的情况都从文本尾开始选择
-                return selectionNode(span, !(start && !!(direction & DOWN)));
-              } else {
-                console.log("=====gutter right layout block", nextSpan);
-                return selectionNode(nextSpan, false);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  let span;
-  // let minDy = Infinity, minDx = Infinity;
-  let minDist = Infinity;
-  // const layoutBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks);
-  for (const s of spans) {
-    if (s.tagName !== "SPAN") continue;
-    const r = s.getBoundingClientRect();
-    if (mouseBlock && !DOMRectUtils.contains(mouseBlock, r)) continue;
-    // 如果已经有选区了，那么除非鼠标明显进入选区外的block，优先选择选区所在的block的文字
-    if (selBlock && !DOMRectUtils.contains(selBlock, r) && !DOMRectUtils.contains(mouseBlock, r)) continue;
-    // x 权重小
-    const dx = Math.min(Math.abs(r.left - clientX), Math.abs(r.right - clientX)) * .2;
-    // const dy = r.top + r.height / 2 - clientY ;
-    const dy = Math.min(Math.abs(r.top + r.height / 2 - clientY), Math.abs(r.bottom - r.height / 2 - clientY))
-    const dist = dx * dx + dy * dy;
-
-    if (dist <= minDist) {
-      // if(r.left > clientX && (direction & LEFT)){
-      //   continue;
-      // }
-      span = s;
-      // minDx = dx, minDy = dy;
-      minDist = dist;
-    }
-  }
-
-  if (span) {
-    const r = span.getBoundingClientRect();
-    console.log("findStartClosestNode fallback, span=", span, clientX >= r.right || clientY >= r.bottom, clientX, r.right, clientY, r.bottom)
-    return selectionNode(span, clientX >= r.right || clientY >= r.bottom);
-  } else {
-    console.log("findStartClosestNode fallback, span=null")
-    return null;
-  }
-};
-
+ 
 
 export {
   computeLayoutBlocks,
