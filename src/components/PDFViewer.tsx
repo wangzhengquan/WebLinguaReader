@@ -9,7 +9,8 @@ import {
   getSelectNodeBy, 
   selectWordAtNode, 
   DOMRectUtils, 
-  getSelectNodeAt
+  getSelectNodeAt,
+  getSelectionRect
 } from '@/selection';
 interface PDFViewerProps {
   pdfDocument: PDFDocumentProxy | null;
@@ -80,6 +81,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
   const renderTaskRef = useRef<any>(null);
   const [highlights, setHighlights] = useState<DOMRect[]>([]);
   const [layoutBlocks, setLayoutBlocks] = useState<DOMRect[]>([]);
+  const [selectionRect, setSelectionRect] = useState<DOMRect[]>([]);
+  
   const startPointRef = useRef<Point | null>(null);
 
   // Update state if forcePreload changes
@@ -370,8 +373,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
     
     // FORCE custom selection logic everywhere
     e.preventDefault(); 
-    let blocks = computeLayoutBlocks(textLayer);
-setLayoutBlocks(blocks);
+setLayoutBlocks(computeLayoutBlocks(textLayer));
     const MIND = 3;
     console.log("handleMouseDown==", e.clientX, e.clientY)
     // let superpositionState_getSelectNodeBy = getSelectNodeBy(e.clientX, e.clientY, textLayer);
@@ -381,6 +383,7 @@ setLayoutBlocks(blocks);
     }
 
     const handleDragSelection = () => {
+      if(!startPointRef.current) return;
       let isDragging = false;
       const handleMouseMove = (ev: MouseEvent) => {
         if (!isDragging) {
@@ -390,9 +393,9 @@ setLayoutBlocks(blocks);
         }
        
         if(window.getSelection().rangeCount === 0) {
-          const direction = getDirection( startPointRef.current.x,  startPointRef.current.y, ev.clientX, ev.clientY);
+          const direction = getDirection(startPointRef.current.x, startPointRef.current.y, ev.clientX, ev.clientY);
           // Lazy Selection: 这里是startX, startY，不是 ev.clientX, ev.clientY。
-          let result = getSelectNodeBy( startPointRef.current.x,  startPointRef.current.y, textLayer, blocks, direction, true);
+          let result = getSelectNodeBy( startPointRef.current.x,  startPointRef.current.y, textLayer, direction, true);
           if(result && result.node){
    // console.log("=====set start", result.node)
             const range = document.createRange();
@@ -416,18 +419,18 @@ setLayoutBlocks(blocks);
         if (!layer && textLayer) layer = textLayer; // Fallback to start page if void
   console.log("layer === textLayer", layer === textLayer)
         if(layer !== textLayer) {
-          blocks = computeLayoutBlocks(layer);
-          setLayoutBlocks(blocks);
           textLayer = layer;
         }
+setLayoutBlocks(computeLayoutBlocks(layer));
 
         if (layer) {
           const direction = getDirection( startPointRef.current.x,  startPointRef.current.y, ev.clientX, ev.clientY);
           // startX = ev.clientX, startY = ev.clientY;
-          const result = getSelectNodeBy(ev.clientX, ev.clientY, layer, blocks, direction,  false);
+          const result = getSelectNodeBy(ev.clientX, ev.clientY, layer, direction,  false);
           if (result && result.node) {
             if (window.getSelection().rangeCount > 0) window.getSelection().extend(result.node, result.offset);
           }
+  setSelectionRect(getSelectionRect());
         }
       };
   
@@ -457,11 +460,12 @@ setLayoutBlocks(blocks);
     // SHIFT CLICK LOGIC: Extend existing selection
     else if (e.shiftKey && window.getSelection() && window.getSelection().rangeCount > 0) {
       let direction = getDirection( startPointRef.current.x,  startPointRef.current.y, e.clientX, e.clientY);
-      const result =  getSelectNodeBy(e.clientX, e.clientY, textLayer, blocks, direction, false);
+      const result =  getSelectNodeBy(e.clientX, e.clientY, textLayer, direction, false);
       console.log("=====shift click extend selection", result)
       if(result && result.node) {
         try {
           window.getSelection().extend(result.node, result.offset);
+          setSelectionRect(getSelectionRect());
         } catch (err) {
           // Fallback to normal window.getSelection() if extend fails
           const range = document.createRange();
@@ -490,12 +494,13 @@ setLayoutBlocks(blocks);
           minHeight: height
       }}
       id={`pdf-page-${pageNumber}`}
+      onMouseDown={handleMouseDown}
     >
         {shouldRender && dimensions ? (
             <>
                 <canvas ref={canvasRef} className="block" />
                 <div ref={textLayerRef} className="textLayer absolute inset-0 origin-top-left cursor-text" 
-                  onMouseDown={handleMouseDown}/>
+                />
                 {highlights.map((rect, i) => {
                     const rel = textLayerRef.current ? getRelativeRect(rect, textLayerRef.current) : rect;
                     return (
@@ -512,7 +517,23 @@ setLayoutBlocks(blocks);
                         />
                     );
                 })}
-
+                {
+                  isActivePage && selectionRect && (() => {
+                    const rel = getRelativeRect(selectionRect, textLayerRef.current);
+                    return (
+                    <div 
+                      className="absolute pointer-events-none z-10 mix-blend-multiply"
+                      style={{
+                          top: rel.top,
+                          left: rel.left,
+                          width: rel.width,
+                          height: rel.height,
+                          border: '1px solid green',
+                          // backgroundColor: 'rgba(253, 224, 71, 0.5)'
+                      }}
+                    />)
+                  })()
+                }
                 {isActivePage && layoutBlocks.map((rect, i) => {
                   // console.log("=======rect===", ""+rect);
                   // const rel  = rect;

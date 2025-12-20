@@ -9,10 +9,17 @@ import {
 
 const getSelectionRect = () => {
   const selection = window.getSelection();
+  const rects: DOMRect[] = [];
   if (selection && selection.rangeCount > 0) {
-    return selection.getRangeAt(0).getBoundingClientRect();
+    for (let i=0; i<selection.rangeCount; i++){
+      const range = selection.getRangeAt(i);
+      // if (!range.collapsed){
+      rects.push(range.getBoundingClientRect()) ;
+    }
   }
-  return null;
+  const rect = DOMRectUtils.union(...rects);
+console.log("getSelectionRect:", rect);
+  return rect;
 }
 
 
@@ -74,26 +81,14 @@ const getClosestTextNodeOfSpans = (clientX: number, clientY: number, spans: HTML
       span = s;
       minDist = dist;
     }
-    // console.log("getClosestTextNodeOfSpans checking span=", s, dist, minDist)
-    // if(s.textContent==='// jump to ret statement'){
-    //   console.log("========getClosestTextNodeOfSpans special span=", s, dist, minDist)
-    // }
   }
 
   const spanRect = span.getBoundingClientRect();
-  if (clientX < spanRect.left && !!(direction & LEFT)) {
-    return null;
-  }
-  if (clientX > spanRect.right && !!(direction & RIGHT)) {
-    return null;
-  }
-  console.log("getClosestTextNodeOfSpans, span=", span)
   const atEnd = clientY >= spanRect.bottom  
     || (!start && !!(direction & DOWN)) 
     || (start && !!(direction & UP));
   return selectionNode(span, atEnd) // 如果刚开始选择且鼠标在文字右侧开始往下滑动则从文本头开始选择
   
-  // return selectionNode(span, clientX >= spanRect.right || clientY >= spanRect.bottom);
 }
 
 
@@ -150,8 +145,9 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
       }
     }
   } else {
-    console.log("getSelectNodeOfSpans fallback")
-    return getClosestTextNodeOfSpans(clientX, clientY, spans, direction, start, weightX);
+    const result = getClosestTextNodeOfSpans(clientX, clientY, spans, direction, start, weightX);
+    console.log("===== closest span: ", result.span)
+    return result;
   }
 }
 
@@ -163,10 +159,10 @@ const getSelectNodeAt = (clientX: number, clientY: number) => {
   return null;
 }
 
-const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, layoutBlocks: DOMRect[], direction: number, start: boolean ) => {
+const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, direction: number, start: boolean ) => {
   const result = getSelectNodeAt(clientX, clientY)
   if(result && result.node) {
-    console.log("getSelectNodeBy from getSelectNodeAt", result.span);
+    console.log("getSelectNodeAt", result.span);
     return result;
   }
 
@@ -174,6 +170,7 @@ const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, l
   spans = spans.filter(s => s.tagName === "SPAN")
   if (spans.length === 0) return null;
 
+  const layoutBlocks = computeLayoutBlocks(layer)
   const mouseBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks)
   const selRect = getSelectionRect();
 
@@ -189,12 +186,13 @@ const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, l
   }
 
   if (selRect) {
-    const selBlock = DOMRectUtils.union(intersectLayoutBlockOf(selRect, layoutBlocks), selRect);
+    const intersectBlocks = intersectLayoutBlockOf(selRect, layoutBlocks);
+    const selBlock = DOMRectUtils.union(...intersectBlocks, selRect);
     const selBlockSpans = spans.filter(s => {
       const r = s.getBoundingClientRect();
       return DOMRectUtils.contains(selBlock, r);
     });
-    console.log("=====getSelectNodeBy in selBlock ", selBlockSpans.length, DOMRectUtils.equals(selBlock, selRect));
+    console.log("=====getSelectNodeBy in selBlock ",intersectBlocks.length, selBlockSpans.length, DOMRectUtils.equals(selBlock, selRect));
     // if (!DOMRectUtils.equals(selBlock, selRect)){
     //   // 如果selBlock和selRect是同一块区域就没必要再选择了，会跳出这一段在全部spans中选择。 但是如果是撤销选择呢？
     //   const result = getSelectNodeOfSpans(clientX, clientY, selBlockSpans, direction, start);
@@ -479,6 +477,7 @@ export {
   computeLayoutBlocks,
   getSelectNodeBy,
   selectWordAtNode,
-  getSelectNodeAt
+  getSelectNodeAt,
+  getSelectionRect
 } 
 

@@ -4,6 +4,7 @@ export {
   getSelectNodeBy,
   getSelectNodeAt,
   selectWordAtNode,
+  getSelectionRect
   
 } from './selection'
 

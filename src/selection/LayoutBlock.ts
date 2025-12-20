@@ -97,14 +97,15 @@ function layoutBlockOf(rect: DOMRect, blocks: DOMRect[]): DOMRect | null {
   return null;
 }
 
-function intersectLayoutBlockOf(rect: DOMRect, blocks: DOMRect[]): DOMRect | null {
+function intersectLayoutBlockOf(rect: DOMRect, blocks: DOMRect[]): DOMRect[]  {
+  const res : DOMRect[] = [];
   for (const block of blocks) {
     if (DOMRectUtils.isIntersect(block, rect)) {
-      return block;
+      res.push(block);
     }
   }
 
-  return null;
+  return res;
 }
 
 function layoutBlockOfCoord(clientX: number, clientY: number, blocks: DOMRect[]): DOMRect | null {
