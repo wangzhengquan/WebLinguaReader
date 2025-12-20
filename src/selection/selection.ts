@@ -77,7 +77,7 @@ const getClosestTextNodeOfSpans = (clientX: number, clientY: number, spans: HTML
     const r = s.getBoundingClientRect();
     const dist = distance(r);
 
-    if (dist <= minDist) {
+    if (dist < minDist) {
       span = s;
       minDist = dist;
     }
