@@ -84,9 +84,10 @@ const getClosestTextNodeOfSpans = (clientX: number, clientY: number, spans: HTML
   }
 
   const spanRect = span.getBoundingClientRect();
-  const atEnd = clientY >= spanRect.bottom  
-    || (!start && !!(direction & DOWN)) 
-    || (start && !!(direction & UP));
+  // const atEnd = clientY >= spanRect.bottom  
+  //   || (!start && !!(direction & DOWN)) 
+  //   || (start && !!(direction & UP));
+  const atEnd = clientY >= spanRect.bottom || clientX >= (spanRect.right)
   return selectionNode(span, atEnd) // 如果刚开始选择且鼠标在文字右侧开始往下滑动则从文本头开始选择
   
 }
@@ -110,13 +111,13 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
     const lastRect = lastSpan.getBoundingClientRect();
     
     if (clientX < firstRect.left) {
-      const atEnd = (!start && !(direction & (UP | LEFT) )) || (start && !!(direction & UP));
-      console.log("==left margin", firstSpan, atEnd, start, direction.toString(2));
-      return selectionNode(firstSpan, atEnd);
+      // const atEnd = (!start && !(direction & (UP | LEFT) )) || (start && !!(direction & UP));
+      // console.log("==left margin", firstSpan, atEnd, start, direction.toString(2));
+      return selectionNode(firstSpan, false);
     } else if (clientX > lastRect.right) {
-      const atEnd = (!start && !(direction & UP)) || (start && !!(direction & (UP | LEFT) ));
-      console.log("==right margin", lastSpan, atEnd, start, direction.toString(2));
-      return selectionNode(lastSpan, atEnd);
+      // const atEnd = (!start && !(direction & UP)) || (start && !!(direction & (UP | LEFT) ));
+      // console.log("==right margin", lastSpan, atEnd, start, direction.toString(2));
+      return selectionNode(lastSpan, true);
     } else {
       // Inside the row (between words or columns)
       for (let i = 0; i < rowSpans.length; i++) {
@@ -200,10 +201,8 @@ const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, d
     
   }
 
- 
-  const span =  getClosestTextNodeOfSpans(clientX, clientY, spans, direction, start, 0.2);
-  console.log("closest in all spans", span);
-  return span;
+  console.log("in all spans");
+  return getClosestTextNodeOfSpans(clientX, clientY, spans, direction, start, 0.2);
 };
 
 
