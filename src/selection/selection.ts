@@ -175,9 +175,8 @@ const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, d
   const mouseBlock = layoutBlockOfCoord(clientX, clientY, layoutBlocks)
   const selRect = getSelectionRect();
 
-  // console.log("getSelectNodeBy:", {mouseBlock, selRect});
   if (mouseBlock) {
-    console.log("getSelectNodeBy in mouseBlock");
+    console.log("===== in mouseBlock");
     const mouseBlockSpans = spans.filter(s => {
       const r = s.getBoundingClientRect();
       return DOMRectUtils.contains(mouseBlock, r);
@@ -189,21 +188,19 @@ const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, d
   if (selRect) {
     const intersectBlocks = intersectLayoutBlockOf(selRect, layoutBlocks);
     const selBlock = DOMRectUtils.union(...intersectBlocks, selRect);
-    const selBlockSpans = spans.filter(s => {
-      const r = s.getBoundingClientRect();
-      return DOMRectUtils.contains(selBlock, r);
-    });
-    console.log("=====getSelectNodeBy in selBlock ",intersectBlocks.length, selBlockSpans.length, DOMRectUtils.equals(selBlock, selRect));
-    // if (!DOMRectUtils.equals(selBlock, selRect)){
-    //   // 如果selBlock和selRect是同一块区域就没必要再选择了，会跳出这一段在全部spans中选择。 但是如果是撤销选择呢？
-    //   const result = getSelectNodeOfSpans(clientX, clientY, selBlockSpans, direction, start);
-    //   if (result && result.node ) return result;
-    // }
-    const result = getSelectNodeOfSpans(clientX, clientY, selBlockSpans, direction, start, 0);
-    if (result && result.node ) return result;
+    if (clientY > selBlock.top && clientY < selBlock.bottom){
+      const selBlockSpans = spans.filter(s => {
+        const r = s.getBoundingClientRect();
+        return DOMRectUtils.contains(selBlock, r);
+      });
+      console.log("===== in selBlock ",intersectBlocks.length, selBlockSpans.length, DOMRectUtils.equals(selBlock, selRect));
+      const result = getSelectNodeOfSpans(clientX, clientY, selBlockSpans, direction, start, 0);
+      if (result && result.node ) return result;
+    }
+    
   }
 
-  console.log("getSelectNodeBy in all spans");
+  console.log("===== in all spans");
   return getClosestTextNodeOfSpans(clientX, clientY, spans, direction, start, 0.2);
 
 };
