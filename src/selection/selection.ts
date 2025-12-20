@@ -111,11 +111,11 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
     
     if (clientX < firstRect.left) {
       const atEnd = (!start && !(direction & (UP | LEFT) )) || (start && !!(direction & UP));
-      console.log("=====left margin", firstSpan, atEnd, start, direction.toString(2));
+      console.log("==left margin", firstSpan, atEnd, start, direction.toString(2));
       return selectionNode(firstSpan, atEnd);
     } else if (clientX > lastRect.right) {
       const atEnd = (!start && !(direction & UP)) || (start && !!(direction & (UP | LEFT) ));
-      console.log("=====right margin", lastSpan, atEnd, start, direction.toString(2));
+      console.log("==right margin", lastSpan, atEnd, start, direction.toString(2));
       return selectionNode(lastSpan, atEnd);
     } else {
       // Inside the row (between words or columns)
@@ -135,10 +135,10 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
             const distLeft = clientX - r.right;
             const distRight = nextR.left - clientX;
             if (distLeft <= distRight) {
-              console.log("=====gutter left", span);
+              console.log("==gutter left", span);
               return selectionNode(span, true);
             } else {
-              console.log("=====gutter right", nextSpan);
+              console.log("==gutter right", nextSpan);
               return selectionNode(nextSpan, false);
             }
           }
@@ -147,7 +147,7 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
     }
   } else {
     const result = getClosestTextNodeOfSpans(clientX, clientY, spans, direction, start, weightX);
-    console.log("===== closest span: ", result.span)
+    console.log("== closest: ", result.span)
     return result;
   }
 }
@@ -176,7 +176,7 @@ const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, d
   const selRect = getSelectionRect();
 
   if (mouseBlock) {
-    console.log("===== in mouseBlock");
+    console.log("in mouseBlock");
     const mouseBlockSpans = spans.filter(s => {
       const r = s.getBoundingClientRect();
       return DOMRectUtils.contains(mouseBlock, r);
@@ -188,21 +188,22 @@ const getSelectNodeBy = (clientX: number, clientY: number, layer: HTMLElement, d
   if (selRect) {
     const intersectBlocks = intersectLayoutBlockOf(selRect, layoutBlocks);
     const selBlock = DOMRectUtils.union(...intersectBlocks, selRect);
-    if (clientY > selBlock.top && clientY < selBlock.bottom){
+    if (clientY >= selBlock.top && clientY <= selBlock.bottom){
       const selBlockSpans = spans.filter(s => {
         const r = s.getBoundingClientRect();
         return DOMRectUtils.contains(selBlock, r);
       });
-      console.log("===== in selBlock ",intersectBlocks.length, selBlockSpans.length, DOMRectUtils.equals(selBlock, selRect));
+      console.log("in selBlock ",intersectBlocks.length, selBlockSpans.length, DOMRectUtils.equals(selBlock, selRect));
       const result = getSelectNodeOfSpans(clientX, clientY, selBlockSpans, direction, start, 0);
       if (result && result.node ) return result;
     }
     
   }
 
-  console.log("===== in all spans");
-  return getClosestTextNodeOfSpans(clientX, clientY, spans, direction, start, 0.2);
-
+ 
+  const span =  getClosestTextNodeOfSpans(clientX, clientY, spans, direction, start, 0.2);
+  console.log("closest in all spans", span);
+  return span;
 };
 
 
