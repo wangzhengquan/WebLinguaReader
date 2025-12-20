@@ -119,7 +119,7 @@ const getSelectNodeOfSpans = (clientX: number, clientY: number, spans: HTMLEleme
       console.log("=====left margin", firstSpan, atEnd, start, direction.toString(2));
       return selectionNode(firstSpan, atEnd);
     } else if (clientX > lastRect.right) {
-      console.log("=====right margin", lastSpan, atEnd);
+      console.log("=====right margin", lastSpan, atEnd, start, direction.toString(2));
       return selectionNode(lastSpan, atEnd);
     } else {
       // Inside the row (between words or columns)

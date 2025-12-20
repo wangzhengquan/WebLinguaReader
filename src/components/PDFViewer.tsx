@@ -1,9 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { PDFDocumentProxy, 
-  UP,
-  DOWN,
-  LEFT,
-  RIGHT } from '../types';
+  UP, DOWN, LEFT, RIGHT,
+  Point } from '@/types';
 import { extractTextFromPage, pdfjs } from '../services/pdfService';
 import { CloudSnow, Loader2 as Loader2Icon } from 'lucide-react';
 import {
@@ -45,6 +43,16 @@ const getRelativeRect = (rect: DOMRect, layer: HTMLElement) => {
   };
 };
 
+const getDirection = (startX: number, startY: number, endX: number, endY: number) => {
+  let direction = 0;
+  const dx = endX - startX, dy = endY - startY;
+  if(dx > 0) direction |= RIGHT;
+  if(dx < 0) direction |= LEFT;
+  if(dy > 0) direction |= DOWN;
+  if(dy < 0) direction |= UP;
+  return direction;
+}
+
 
 
 // Sub-component for individual pages
@@ -72,6 +80,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
   const renderTaskRef = useRef<any>(null);
   const [highlights, setHighlights] = useState<DOMRect[]>([]);
   const [layoutBlocks, setLayoutBlocks] = useState<DOMRect[]>([]);
+  const startPointRef = useRef<Point | null>(null);
 
   // Update state if forcePreload changes
   useEffect(() => {
@@ -366,26 +375,24 @@ setLayoutBlocks(blocks);
     const MIND = 3;
     console.log("handleMouseDown==", e.clientX, e.clientY)
     // let superpositionState_getSelectNodeBy = getSelectNodeBy(e.clientX, e.clientY, textLayer);
-    const startX = e.clientX, startY = e.clientY;
+    // let startX = 0 , startY = 0;
+    if(window.getSelection().rangeCount === 0) {
+      startPointRef.current = { x: e.clientX, y: e.clientY };
+    }
 
     const handleDragSelection = () => {
       let isDragging = false;
       const handleMouseMove = (ev: MouseEvent) => {
         if (!isDragging) {
-            const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
+            const dist = Math.hypot(ev.clientX - startPointRef.current.x, ev.clientY -  startPointRef.current.y);
             if (dist < MIND) return;
             isDragging = true;
         }
        
         if(window.getSelection().rangeCount === 0) {
-          let direction = 0;
-          const dx = ev.clientX - startX, dy = ev.clientY - startY;
-          if(dx > 0) direction |= RIGHT;
-          if(dx < 0) direction |= LEFT;
-          if(dy > 0) direction |= DOWN;
-          if(dy < 0) direction |= UP;
+          const direction = getDirection( startPointRef.current.x,  startPointRef.current.y, ev.clientX, ev.clientY);
           // Lazy Selection: 这里是startX, startY，不是 ev.clientX, ev.clientY。
-          let result = getSelectNodeBy(startX, startY, textLayer, blocks, direction, true);
+          let result = getSelectNodeBy( startPointRef.current.x,  startPointRef.current.y, textLayer, blocks, direction, true);
           if(result && result.node){
    // console.log("=====set start", result.node)
             const range = document.createRange();
@@ -415,12 +422,7 @@ setLayoutBlocks(blocks);
         }
 
         if (layer) {
-          let direction = 0;
-          const dx = ev.clientX - startX, dy = ev.clientY - startY;
-          if(dx > 0) direction |= RIGHT;
-          if(dx < 0) direction |= LEFT;
-          if(dy > 0) direction |= DOWN;
-          if(dy < 0) direction |= UP;
+          const direction = getDirection( startPointRef.current.x,  startPointRef.current.y, ev.clientX, ev.clientY);
           // startX = ev.clientX, startY = ev.clientY;
           const result = getSelectNodeBy(ev.clientX, ev.clientY, layer, blocks, direction,  false);
           if (result && result.node) {
@@ -445,7 +447,7 @@ setLayoutBlocks(blocks);
 
     if (e.detail === 2) {
       window.getSelection().removeAllRanges();
-      const result = getSelectNodeAt(startX, startY);
+      const result = getSelectNodeAt(e.clientX, e.clientY);
       if (result && result.node) {
         selectWordAtNode(result.node, result.offset);
         // Attach drag listener to allow extending from the word selection
@@ -454,14 +456,8 @@ setLayoutBlocks(blocks);
     }
     // SHIFT CLICK LOGIC: Extend existing selection
     else if (e.shiftKey && window.getSelection() && window.getSelection().rangeCount > 0) {
-      let direction = 0;
-      const dx = e.clientX - startX, dy = e.clientY - startY;
-      if(dx > 0) direction |= RIGHT;
-      if(dx < 0) direction |= LEFT;
-      if(dy > 0) direction |= DOWN;
-      if(dy < 0) direction |= UP;
-      // startX = e.clientX, startY = e.clientY;
-      const result =  getSelectNodeBy(e.clientX, e.clientY, textLayer, blocks, direction, true);
+      let direction = getDirection( startPointRef.current.x,  startPointRef.current.y, e.clientX, e.clientY);
+      const result =  getSelectNodeBy(e.clientX, e.clientY, textLayer, blocks, direction, false);
       console.log("=====shift click extend selection", result)
       if(result && result.node) {
         try {
@@ -486,20 +482,20 @@ setLayoutBlocks(blocks);
 
   return (
     <div 
-        ref={wrapperRef}
-        className="relative bg-white shadow-md my-4 transition-all duration-200 origin-top"
-        style={{ 
-            width: width, 
-            height: height, 
-            minHeight: height
-        }}
-        id={`pdf-page-${pageNumber}`}
-        onMouseDown={handleMouseDown}
+      ref={wrapperRef}
+      className="relative bg-white shadow-md my-4 transition-all duration-200 origin-top"
+      style={{ 
+          width: width, 
+          height: height, 
+          minHeight: height
+      }}
+      id={`pdf-page-${pageNumber}`}
     >
         {shouldRender && dimensions ? (
             <>
                 <canvas ref={canvasRef} className="block" />
-                <div ref={textLayerRef} className="textLayer absolute inset-0 origin-top-left" />
+                <div ref={textLayerRef} className="textLayer absolute inset-0 origin-top-left cursor-text" 
+                  onMouseDown={handleMouseDown}/>
                 {highlights.map((rect, i) => {
                     const rel = textLayerRef.current ? getRelativeRect(rect, textLayerRef.current) : rect;
                     return (
